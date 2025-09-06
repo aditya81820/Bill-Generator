@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Invoice, Shop } from '@/types';
 import { formatCurrency, formatDate } from './calculations';
@@ -111,22 +111,21 @@ export const generateInvoicePDF = async (invoice: Invoice, shop: Shop): Promise<
     </html>
   `;
 
-  // Save HTML to file
-  const fileName = `invoice_${invoice.invoiceNumber}_${Date.now()}.html`;
-  const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-  
-  await FileSystem.writeAsStringAsync(fileUri, htmlContent, {
-    encoding: FileSystem.EncodingType.UTF8,
+  // Generate PDF from HTML
+  const { uri } = await Print.printToFileAsync({
+    html: htmlContent,
+    base64: false,
   });
 
-  return fileUri;
+  return uri;
 };
 
 export const shareInvoice = async (fileUri: string): Promise<void> => {
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(fileUri, {
-      mimeType: 'text/html',
+      mimeType: 'application/pdf',
       dialogTitle: 'Share Invoice',
+      UTI: '.pdf',
     });
   }
 };
