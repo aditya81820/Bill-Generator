@@ -17,6 +17,8 @@ export default function OnboardingScreen() {
     name: '',
     address: '',
     gstin: '',
+    proprietaryName: '',
+    mobileNo: '',
   });
   const [loading, setLoading] = useState(false);
 
@@ -33,6 +35,8 @@ export default function OnboardingScreen() {
         name: formData.name.trim(),
         address: formData.address.trim() || undefined,
         gstin: formData.gstin.trim() || undefined,
+        proprietaryName: formData.proprietaryName.trim() || undefined,
+        mobileNo: formData.mobileNo.trim() || undefined,
       };
 
       await StorageService.saveShop(shopData);
@@ -79,6 +83,21 @@ export default function OnboardingScreen() {
           value={formData.gstin}
           onChangeText={(text) => setFormData({ ...formData, gstin: text })}
           placeholder="Enter GSTIN or Tax ID (optional)"
+        />
+        
+        <CustomInput
+          label="Proprietory Name"
+          value={formData.proprietaryName}
+          onChangeText={(text) => setFormData({ ...formData, proprietaryName: text })}
+          placeholder="Enter proprietory name (optional)"
+        />
+        
+        <CustomInput
+          label="Mobile Number"
+          value={formData.mobileNo}
+          onChangeText={(text) => setFormData({ ...formData, mobileNo: text })}
+          keyboardType="phone-pad"
+          placeholder="Enter mobile number (optional)"
         />
       </View>
 

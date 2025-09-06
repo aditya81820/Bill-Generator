@@ -1,11 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Shop, Product, Invoice } from '@/types';
+import { Shop, Product, Invoice, Customer } from '@/types';
 
 const KEYS = {
   SHOP: 'shop_details',
   PRODUCTS: 'products',
   INVOICES: 'invoices',
   INVOICE_COUNTER: 'invoice_counter',
+  CUSTOMERS: 'customers',
 };
 
 export const StorageService = {
@@ -84,5 +85,64 @@ export const StorageService = {
   async incrementInvoiceCounter(): Promise<void> {
     const counter = await this.getInvoiceCounter();
     await AsyncStorage.setItem(KEYS.INVOICE_COUNTER, (counter + 1).toString());
+  },
+
+  async updateInvoice(id: string, updates: Partial<Invoice>): Promise<void> {
+    const invoices = await this.getInvoices();
+    const index = invoices.findIndex(inv => inv.id === id);
+    if (index !== -1) {
+      invoices[index] = { ...invoices[index], ...updates };
+      await this.saveInvoices(invoices);
+    }
+  },
+
+  // Customer operations
+  async saveCustomers(customers: Customer[]): Promise<void> {
+    await AsyncStorage.setItem(KEYS.CUSTOMERS, JSON.stringify(customers));
+  },
+
+  async getCustomers(): Promise<Customer[]> {
+    const data = await AsyncStorage.getItem(KEYS.CUSTOMERS);
+    return data ? JSON.parse(data) : [];
+  },
+
+  async addCustomer(customer: Omit<Customer, 'id'>): Promise<Customer> {
+    const customers = await this.getCustomers();
+    const existingCustomer = customers.find(
+      c => c.name.toLowerCase() === customer.name.toLowerCase() || 
+           (customer.phone && c.phone === customer.phone)
+    );
+    
+    if (existingCustomer) {
+      // Update existing customer if more info provided
+      if (customer.address && !existingCustomer.address) {
+        existingCustomer.address = customer.address;
+      }
+      if (customer.phone && !existingCustomer.phone) {
+        existingCustomer.phone = customer.phone;
+      }
+      await this.saveCustomers(customers);
+      return existingCustomer;
+    }
+    
+    const newCustomer = { ...customer, id: Date.now().toString() };
+    customers.push(newCustomer);
+    await this.saveCustomers(customers);
+    return newCustomer;
+  },
+
+  async updateCustomer(id: string, updates: Partial<Customer>): Promise<void> {
+    const customers = await this.getCustomers();
+    const index = customers.findIndex(c => c.id === id);
+    if (index !== -1) {
+      customers[index] = { ...customers[index], ...updates };
+      await this.saveCustomers(customers);
+    }
+  },
+
+  async deleteCustomer(id: string): Promise<void> {
+    const customers = await this.getCustomers();
+    const filtered = customers.filter(c => c.id !== id);
+    await this.saveCustomers(filtered);
   },
 };

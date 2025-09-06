@@ -9,25 +9,57 @@ import {
   Modal,
   FlatList,
   Switch,
+  TextInput,
+  Pressable,
 } from 'react-native';
 import { router } from 'expo-router';
+import * as Contacts from 'expo-contacts';
 import { StorageService } from '@/utils/storage';
 import { calculateBill, formatCurrency } from '@/utils/calculations';
-import { Product, CartItem } from '@/types';
+import { Product, CartItem, Customer } from '@/types';
 import CustomInput from '@/components/CustomInput';
 import CustomButton from '@/components/CustomButton';
-import { Plus, Minus, Trash2, ShoppingCart, Search, Package } from 'lucide-react-native';
+import { 
+  Plus, 
+  Minus, 
+  Trash2, 
+  ShoppingCart, 
+  Search, 
+  Package, 
+  Phone, 
+  User, 
+  MapPin, 
+  CreditCard,
+  Edit3
+} from 'lucide-react-native';
 
 export default function GenerateBillScreen() {
+  // Customer Details
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
+  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
+  const [showContactPicker, setShowContactPicker] = useState(false);
+  
+  // Cart and Products
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  
+  // Billing Details
   const [billDiscount, setBillDiscount] = useState(0);
   const [billDiscountType, setBillDiscountType] = useState<'amount' | 'percentage'>('percentage');
   const [taxPercent, setTaxPercent] = useState(0);
   const [applyTax, setApplyTax] = useState(false);
   const [otherCharges, setOtherCharges] = useState(0);
+  
+  // Payment Details
+  const [paidAmount, setPaidAmount] = useState(0);
+  const [paymentMode, setPaymentMode] = useState('Cash');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  
+  // Product Management
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showCreateProduct, setShowCreateProduct] = useState(false);
   
@@ -50,13 +82,106 @@ export default function GenerateBillScreen() {
     defaultDiscount: 0,
   });
 
+  const paymentModes = ['Cash', 'Card', 'UPI', 'Bank Transfer', 'Cheque'];
+
   useEffect(() => {
-    loadProducts();
+    loadData();
   }, []);
 
-  const loadProducts = async () => {
-    const productList = await StorageService.getProducts();
+  const loadData = async () => {
+    const [productList, customerList] = await Promise.all([
+      StorageService.getProducts(),
+      StorageService.getCustomers(),
+    ]);
     setProducts(productList);
+    setCustomers(customerList);
+  };
+
+  // Customer Management
+  const handleCustomerNameChange = (text: string) => {
+    setCustomerName(text);
+    if (text.length > 0) {
+      const filtered = customers.filter(customer =>
+        customer.name.toLowerCase().includes(text.toLowerCase())
+      );
+      setFilteredCustomers(filtered);
+      setShowCustomerSuggestions(true);
+    } else {
+      setShowCustomerSuggestions(false);
+    }
+  };
+
+  const selectCustomer = (customer: Customer) => {
+    setCustomerName(customer.name);
+    setCustomerPhone(customer.phone || '');
+    setCustomerAddress(customer.address || '');
+    setShowCustomerSuggestions(false);
+  };
+
+  const requestContactsPermission = async () => {
+    try {
+      // First check current permission status
+      const { status: currentStatus } = await Contacts.getPermissionsAsync();
+      
+      let finalStatus = currentStatus;
+      
+      // If permission is not granted, request it
+      if (currentStatus !== 'granted') {
+        const { status: requestStatus } = await Contacts.requestPermissionsAsync();
+        finalStatus = requestStatus;
+      }
+      
+      if (finalStatus === 'granted') {
+        // Permission granted, fetch contacts
+        const { data } = await Contacts.getContactsAsync({
+          fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
+          sort: Contacts.SortTypes.FirstName,
+        });
+
+        if (data.length > 0) {
+          const contactOptions = data
+            .filter(contact => contact.name && contact.phoneNumbers?.length > 0)
+            .slice(0, 10)
+            .map(contact => ({
+              name: contact.name,
+              phone: contact.phoneNumbers?.[0]?.number?.replace(/[^0-9+]/g, '') || '',
+            }));
+
+          if (contactOptions.length > 0) {
+            Alert.alert(
+              'Select Contact',
+              'Choose a contact to add',
+              contactOptions.map((contact) => ({
+                text: `${contact.name} - ${contact.phone}`,
+                onPress: () => {
+                  setCustomerName(contact.name);
+                  setCustomerPhone(contact.phone);
+                },
+              })).concat([{ text: 'Cancel', style: 'cancel' }])
+            );
+          } else {
+            Alert.alert('No Contacts', 'No contacts with phone numbers found.');
+          }
+        } else {
+          Alert.alert('No Contacts', 'No contacts found on your device.');
+        }
+      } else {
+        Alert.alert(
+          'Permission Required', 
+          'Contacts permission is needed to import customer details. Please enable it in your device settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => {
+              // On Android, we can't directly open settings, but we can inform the user
+              Alert.alert('Enable Permission', 'Go to Settings > Apps > Bill Generator > Permissions > Contacts and enable access.');
+            }}
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error accessing contacts:', error);
+      Alert.alert('Error', 'Failed to access contacts. Please try again.');
+    }
   };
 
   // Product search and suggestion handlers
@@ -149,6 +274,30 @@ export default function GenerateBillScreen() {
     setShowAddProduct(false);
   };
 
+  const addNewItemInline = () => {
+    if (!newItemName.trim() || !newItemPrice.trim()) {
+      Alert.alert('Error', 'Please enter product name and price');
+      return;
+    }
+
+    const newItem: CartItem = {
+      id: Date.now().toString(),
+      name: newItemName.trim(),
+      qty: parseInt(newItemQty) || 1,
+      unitPrice: parseFloat(newItemPrice) || 0,
+      discount: parseFloat(newItemDiscount) || 0,
+    };
+
+    setCartItems([...cartItems, newItem]);
+    
+    // Reset form
+    setNewItemName('');
+    setNewItemQty('1');
+    setNewItemPrice('');
+    setNewItemDiscount('0');
+    setShowProductSuggestions(false);
+  };
+
   const updateCartItem = (id: string, updates: Partial<CartItem>) => {
     setCartItems(items =>
       items.map(item => (item.id === id ? { ...item, ...updates } : item))
@@ -159,6 +308,24 @@ export default function GenerateBillScreen() {
     setCartItems(items => items.filter(item => item.id !== id));
   };
 
+  const startEditItem = (item: CartItem) => {
+    setEditingItemId(item.id);
+    setEditingItem({ ...item });
+  };
+
+  const saveEditItem = () => {
+    if (editingItem && editingItemId) {
+      updateCartItem(editingItemId, editingItem);
+      setEditingItemId(null);
+      setEditingItem(null);
+    }
+  };
+
+  const cancelEditItem = () => {
+    setEditingItemId(null);
+    setEditingItem(null);
+  };
+
   const calculation = calculateBill(
     cartItems,
     billDiscount,
@@ -167,7 +334,9 @@ export default function GenerateBillScreen() {
     otherCharges
   );
 
-  const handlePreviewInvoice = () => {
+  const dueAmount = Math.max(0, calculation.grandTotal - paidAmount);
+
+  const handlePreviewInvoice = async () => {
     if (!customerName.trim()) {
       Alert.alert('Error', 'Please enter customer name');
       return;
@@ -178,9 +347,17 @@ export default function GenerateBillScreen() {
       return;
     }
 
+    // Save customer if new
+    await StorageService.addCustomer({
+      name: customerName.trim(),
+      phone: customerPhone.trim() || undefined,
+      address: customerAddress.trim() || undefined,
+    });
+
     const invoiceData = {
       customerName: customerName.trim(),
       customerPhone: customerPhone.trim() || undefined,
+      customerAddress: customerAddress.trim() || undefined,
       date: Date.now(),
       items: cartItems,
       billDiscount: calculation.billDiscount,
@@ -188,6 +365,10 @@ export default function GenerateBillScreen() {
       otherCharges,
       subtotal: calculation.subtotal,
       total: calculation.grandTotal,
+      paidAmount,
+      dueAmount,
+      paymentMode,
+      isPaid: dueAmount === 0,
     };
 
     router.push({
@@ -197,7 +378,7 @@ export default function GenerateBillScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.header}>
         <Text style={styles.title}>Generate New Bill</Text>
       </View>
@@ -205,20 +386,64 @@ export default function GenerateBillScreen() {
       {/* Customer Details */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Customer Details</Text>
-        <CustomInput
-          label="Customer Name"
-          value={customerName}
-          onChangeText={setCustomerName}
-          required
-          placeholder="Enter customer name"
-        />
-        <CustomInput
-          label="Phone Number"
-          value={customerPhone}
-          onChangeText={setCustomerPhone}
-          keyboardType="phone-pad"
-          placeholder="Enter phone number (optional)"
-        />
+        <View style={styles.customerContainer}>
+          <View style={styles.customerInputContainer}>
+            <CustomInput
+              label="Customer Name"
+              value={customerName}
+              onChangeText={handleCustomerNameChange}
+              required
+              placeholder="Enter customer name"
+            />
+            {showCustomerSuggestions && filteredCustomers.length > 0 && (
+              <View style={styles.suggestionsContainer}>
+                <FlatList
+                  data={filteredCustomers.slice(0, 5)}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.suggestionItem}
+                      onPress={() => selectCustomer(item)}
+                    >
+                      <User size={16} color="#007AFF" />
+                      <View style={styles.suggestionDetails}>
+                        <Text style={styles.suggestionName}>{item.name}</Text>
+                        {item.phone && (
+                          <Text style={styles.suggestionPhone}>{item.phone}</Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                />
+              </View>
+            )}
+          </View>
+          
+          <View style={styles.phoneInputContainer}>
+            <CustomInput
+              label="Phone Number"
+              value={customerPhone}
+              onChangeText={setCustomerPhone}
+              keyboardType="phone-pad"
+              placeholder="Enter phone number"
+            />
+            <TouchableOpacity
+              style={styles.contactButton}
+              onPress={requestContactsPermission}
+            >
+              <Phone size={20} color="#007AFF" />
+            </TouchableOpacity>
+          </View>
+          
+          <CustomInput
+            label="Customer Address"
+            value={customerAddress}
+            onChangeText={setCustomerAddress}
+            placeholder="Enter customer address (optional)"
+            multiline
+            numberOfLines={2}
+          />
+        </View>
       </View>
 
       {/* Products */}
@@ -229,8 +454,6 @@ export default function GenerateBillScreen() {
             style={styles.addButton}
             onPress={() => {
               setShowAddProduct(true);
-              setProductSearchQuery('');
-              setShowSuggestions(false);
               setNewProduct({ name: '', qty: 1, unitPrice: 0, discount: 0 });
             }}
           >
@@ -312,13 +535,11 @@ export default function GenerateBillScreen() {
         )}
       </View>
 
-
       {/* Discount & Tax Settings */}
       {cartItems.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Discount & Tax Settings</Text>
           <View style={styles.settingsCard}>
-            {/* Bill Discount */}
             <View style={styles.settingRow}>
               <Text style={styles.settingLabel}>Bill Discount</Text>
               <View style={styles.discountControls}>
@@ -344,18 +565,13 @@ export default function GenerateBillScreen() {
               placeholder={billDiscountType === 'percentage' ? 'Enter percentage' : 'Enter amount'}
             />
             
-            {/* Tax Settings */}
             <View style={styles.settingRow}>
               <Text style={styles.settingLabel}>Apply GST</Text>
               <Switch
                 value={applyTax}
                 onValueChange={(value) => {
                   setApplyTax(value);
-                  if (!value) {
-                    setTaxPercent(0);
-                  } else {
-                    setTaxPercent(18);
-                  }
+                  setTaxPercent(value ? 18 : 0);
                 }}
               />
             </View>
@@ -370,7 +586,6 @@ export default function GenerateBillScreen() {
               />
             )}
             
-            {/* Other Charges */}
             <CustomInput
               label="Other Charges"
               value={otherCharges.toString()}
@@ -382,7 +597,59 @@ export default function GenerateBillScreen() {
         </View>
       )}
 
-      
+      {/* Payment Section */}
+      {cartItems.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Payment Details</Text>
+          <View style={styles.paymentCard}>
+            <View style={styles.paymentRow}>
+              <Text style={styles.paymentLabel}>Grand Total:</Text>
+              <Text style={styles.paymentTotal}>{formatCurrency(calculation.grandTotal)}</Text>
+            </View>
+            
+            <CustomInput
+              label="Paid Amount"
+              value={paidAmount.toString()}
+              onChangeText={(text) => setPaidAmount(parseFloat(text) || 0)}
+              keyboardType="numeric"
+              placeholder="Enter paid amount"
+            />
+            
+            <View style={styles.paymentRow}>
+              <Text style={styles.paymentLabel}>Due Amount:</Text>
+              <Text style={[styles.paymentValue, dueAmount > 0 && styles.dueAmount]}>
+                {formatCurrency(dueAmount)}
+              </Text>
+            </View>
+            
+            <View style={styles.paymentModeContainer}>
+              <Text style={styles.paymentModeLabel}>Payment Mode:</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.paymentModeButtons}>
+                  {paymentModes.map((mode) => (
+                    <TouchableOpacity
+                      key={mode}
+                      style={[
+                        styles.paymentModeButton,
+                        paymentMode === mode && styles.paymentModeActive
+                      ]}
+                      onPress={() => setPaymentMode(mode)}
+                    >
+                      <Text style={[
+                        styles.paymentModeText,
+                        paymentMode === mode && styles.paymentModeTextActive
+                      ]}>
+                        {mode}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* Bill Summary */}
       {cartItems.length > 0 && (
         <View style={styles.section}>
@@ -432,7 +699,7 @@ export default function GenerateBillScreen() {
       {cartItems.length > 0 && (
         <View style={styles.actionButtons}>
           <CustomButton
-            title="Preview Invoice"
+            title="Generate Invoice"
             onPress={handlePreviewInvoice}
             variant="primary"
           />
@@ -625,25 +892,233 @@ const styles = StyleSheet.create({
   section: {
     padding: 16,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
+    marginBottom: 16,
   },
-  addButton: {
+  
+  // Customer styles
+  customerContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+  },
+  customerInputContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  phoneInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginBottom: 16,
+  },
+  contactButton: {
+    marginLeft: 12,
+    marginBottom: 8,
+    padding: 8,
+    backgroundColor: '#F0F8FF',
+    borderRadius: 8,
+  },
+  suggestionsContainer: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    maxHeight: 200,
+    zIndex: 1000,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  suggestionDetails: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  suggestionName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  suggestionPhone: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  
+  // Product table styles
+  productTable: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#F8F9FA',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  tableHeaderCell: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+  },
+  tableRow: {
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  tableInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    fontSize: 14,
+    backgroundColor: '#FFFFFF',
+  },
+  tableCell: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+    textAlign: 'center',
+    paddingVertical: 8,
+  },
+  productNameCell: {
+    flex: 2,
+    position: 'relative',
+  },
+  qtyCell: {
+    flex: 0.8,
+    marginHorizontal: 4,
+  },
+  priceCell: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  discountCell: {
+    flex: 0.8,
+    marginHorizontal: 4,
+  },
+  addItemButton: {
     backgroundColor: '#34C759',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    marginLeft: 8,
   },
+  itemActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flex: 1,
+  },
+  editActions: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    flex: 1,
+  },
+  saveButton: {
+    backgroundColor: '#34C759',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginBottom: 4,
+  },
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  cancelButton: {
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  cancelButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  itemTotalRow: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  itemTotal: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'right',
+  },
+  discountText: {
+    color: '#FF9500',
+    fontSize: 12,
+  },
+  
+  // Product suggestions in table
+  productSuggestionsContainer: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    maxHeight: 150,
+    zIndex: 1000,
+  },
+  productSuggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  productSuggestionName: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+    marginLeft: 8,
+  },
+  productSuggestionPrice: {
+    fontSize: 12,
+    color: '#666',
+  },
+  addNewProductSuggestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    backgroundColor: '#F8F9FA',
+  },
+  addNewProductText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#34C759',
+    marginLeft: 8,
+  },
+  
   emptyCart: {
     alignItems: 'center',
     padding: 32,
@@ -662,6 +1137,173 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
+  
+  // Settings Card Styles
+  settingsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  settingLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  discountControls: {
+    flexDirection: 'row',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    padding: 2,
+  },
+  discountTypeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginHorizontal: 2,
+  },
+  discountTypeActive: {
+    backgroundColor: '#007AFF',
+  },
+  discountTypeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+  },
+  discountTypeTextActive: {
+    color: '#FFFFFF',
+  },
+  
+  // Payment styles
+  paymentCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+  },
+  paymentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  paymentLabel: {
+    fontSize: 16,
+    color: '#666',
+  },
+  paymentTotal: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#007AFF',
+  },
+  paymentValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  dueAmount: {
+    color: '#FF3B30',
+  },
+  paymentModeContainer: {
+    marginTop: 16,
+  },
+  paymentModeLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+    marginBottom: 12,
+  },
+  paymentModeButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  paymentModeButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  paymentModeActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  paymentModeText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  paymentModeTextActive: {
+    color: '#FFFFFF',
+  },
+  
+  // Summary styles
+  summaryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  summaryLabel: {
+    fontSize: 16,
+    color: '#666',
+  },
+  summaryValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  discountValue: {
+    color: '#FF9500',
+  },
+  totalRow: {
+    borderTopWidth: 2,
+    borderTopColor: '#E5E5EA',
+    marginTop: 8,
+    paddingTop: 16,
+  },
+  totalLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  totalValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#007AFF',
+  },
+  actionButtons: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  
+  // Section header styles
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  addButton: {
+    backgroundColor: '#34C759',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
+  // Cart list styles
   cartList: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -716,54 +1358,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
-  discountText: {
-    fontSize: 12,
-    color: '#FF9500',
-    marginTop: 4,
-  },
-  summaryCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-  },
-  summaryRow: {
+  itemDiscountContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
-  },
-  summaryLabel: {
-    fontSize: 16,
-    color: '#666',
-  },
-  summaryValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-  },
-  discountValue: {
-    color: '#FF9500',
-  },
-  totalRow: {
-    borderTopWidth: 2,
-    borderTopColor: '#E5E5EA',
     marginTop: 8,
-    paddingTop: 16,
+    marginBottom: 8,
   },
-  totalLabel: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+  itemDiscountLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginRight: 8,
   },
-  totalValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#007AFF',
+  itemDiscountInput: {
+    width: 80,
   },
-  actionButtons: {
-    padding: 16,
-    paddingBottom: 32,
+  smallInput: {
+    height: 40,
   },
+  
+  // Modal styles
   modalContainer: {
     flex: 1,
     backgroundColor: '#F8F9FA',
@@ -797,91 +1410,13 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E5E5EA',
   },
-  
-  // Settings Card Styles
-  settingsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
+  productForm: {
+    flex: 1,
   },
-  settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  productInputContainer: {
+    position: 'relative',
     marginBottom: 16,
-  },
-  settingLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-  },
-  discountControls: {
-    flexDirection: 'row',
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    padding: 2,
-  },
-  discountTypeButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    marginHorizontal: 2,
-  },
-  discountTypeActive: {
-    backgroundColor: '#007AFF',
-  },
-  discountTypeText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
-  },
-  discountTypeTextActive: {
-    color: '#FFFFFF',
-  },
-  
-  // Search and Suggestions Styles
-  searchContainer: {
-    marginBottom: 20,
-  },
-  searchInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    paddingHorizontal: 12,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    borderWidth: 0,
-  },
-  suggestionsContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    marginTop: 8,
-    maxHeight: 250,
-  },
-  suggestionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  suggestionDetails: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  suggestionName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
+    zIndex: 1000,
   },
   suggestionPrice: {
     fontSize: 14,
@@ -910,34 +1445,5 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginLeft: 8,
     flex: 1,
-  },
-  productForm: {
-    flex: 1,
-  },
-  
-  // Product input with suggestions
-  productInputContainer: {
-    position: 'relative',
-    marginBottom: 16,
-    zIndex: 1000,
-  },
-  
-  // Item discount styles
-  itemDiscountContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  itemDiscountLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginRight: 8,
-  },
-  itemDiscountInput: {
-    width: 80,
-  },
-  smallInput: {
-    height: 40,
   },
 });

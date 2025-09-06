@@ -3,6 +3,8 @@ export interface Shop {
   name: string;
   address?: string;
   gstin?: string;
+  proprietaryName?: string;
+  mobileNo?: string;
 }
 
 export interface Product {
@@ -21,11 +23,19 @@ export interface CartItem {
   discount: number;
 }
 
+export interface Customer {
+  id: string;
+  name: string;
+  phone?: string;
+  address?: string;
+}
+
 export interface Invoice {
   id: string;
   invoiceNumber: string;
   customerName: string;
   customerPhone?: string;
+  customerAddress?: string;
   date: number;
   items: CartItem[];
   billDiscount: number;
@@ -33,6 +43,10 @@ export interface Invoice {
   otherCharges: number;
   subtotal: number;
   total: number;
+  paidAmount?: number;
+  dueAmount?: number;
+  paymentMode?: string;
+  isPaid?: boolean;
 }
 
 export interface BillCalculation {

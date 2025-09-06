@@ -31,7 +31,9 @@ export const generateInvoicePDF = async (invoice: Invoice, shop: Shop): Promise<
       <div class="header">
         <div class="shop-name">${shop.name}</div>
         <div class="shop-details">
+          ${shop.proprietaryName ? `<div>Proprietor: ${shop.proprietaryName}</div>` : ''}
           ${shop.address ? `<div>${shop.address}</div>` : ''}
+          ${shop.mobileNo ? `<div>Mobile: ${shop.mobileNo}</div>` : ''}
           ${shop.gstin ? `<div>GSTIN: ${shop.gstin}</div>` : ''}
         </div>
       </div>
@@ -46,7 +48,8 @@ export const generateInvoicePDF = async (invoice: Invoice, shop: Shop): Promise<
       <div class="customer-info">
         <strong>Bill To:</strong><br>
         ${invoice.customerName}<br>
-        ${invoice.customerPhone ? `Phone: ${invoice.customerPhone}` : ''}
+        ${invoice.customerPhone ? `Phone: ${invoice.customerPhone}<br>` : ''}
+        ${invoice.customerAddress ? `Address: ${invoice.customerAddress}` : ''}
       </div>
 
       <table class="items-table">
@@ -107,6 +110,39 @@ export const generateInvoicePDF = async (invoice: Invoice, shop: Shop): Promise<
           </tr>
         </table>
       </div>
+
+      ${(invoice.paidAmount !== undefined || invoice.paymentMode) ? `
+        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
+          <strong>Payment Details:</strong><br><br>
+          <div class="totals">
+            <table>
+              ${invoice.paidAmount !== undefined ? `
+                <tr>
+                  <td>Paid Amount:</td>
+                  <td class="text-right">${formatCurrency(invoice.paidAmount)}</td>
+                </tr>
+              ` : ''}
+              ${invoice.dueAmount !== undefined && invoice.dueAmount > 0 ? `
+                <tr>
+                  <td>Due Amount:</td>
+                  <td class="text-right" style="color: #FF3B30; font-weight: bold;">${formatCurrency(invoice.dueAmount)}</td>
+                </tr>
+              ` : ''}
+              ${invoice.paymentMode ? `
+                <tr>
+                  <td>Payment Mode:</td>
+                  <td class="text-right">${invoice.paymentMode}</td>
+                </tr>
+              ` : ''}
+            </table>
+            ${invoice.isPaid ? `
+              <div style="text-align: center; margin-top: 15px; padding: 10px; background-color: #E8F5E8; border-radius: 8px;">
+                <strong style="color: #34C759; font-size: 16px;">✓ PAID</strong>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      ` : ''}
     </body>
     </html>
   `;

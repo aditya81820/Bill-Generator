@@ -14,7 +14,7 @@ import { formatCurrency, formatDate } from '@/utils/calculations';
 import { Shop, Invoice } from '@/types';
 import CustomButton from '@/components/CustomButton';
 import LoadingSpinner from '@/components/LoadingSpinner';
-import { Share, Download, ArrowLeft } from 'lucide-react-native';
+import { Share, Download, ArrowLeft, Edit3 } from 'lucide-react-native';
 
 export default function InvoicePreviewScreen() {
   const params = useLocalSearchParams();
@@ -138,8 +138,14 @@ export default function InvoicePreviewScreen() {
           {/* Shop Header */}
           <View style={styles.shopHeader}>
             <Text style={styles.shopName}>{shop.name}</Text>
+            {shop.proprietaryName && (
+              <Text style={styles.proprietaryName}>Proprietor: {shop.proprietaryName}</Text>
+            )}
             {shop.address && (
               <Text style={styles.shopAddress}>{shop.address}</Text>
+            )}
+            {shop.mobileNo && (
+              <Text style={styles.shopMobile}>Mobile: {shop.mobileNo}</Text>
             )}
             {shop.gstin && (
               <Text style={styles.shopGstin}>GSTIN: {shop.gstin}</Text>
@@ -164,6 +170,9 @@ export default function InvoicePreviewScreen() {
             <Text style={styles.customerName}>{invoice.customerName}</Text>
             {invoice.customerPhone && (
               <Text style={styles.customerPhone}>Phone: {invoice.customerPhone}</Text>
+            )}
+            {invoice.customerAddress && (
+              <Text style={styles.customerAddress}>Address: {invoice.customerAddress}</Text>
             )}
           </View>
 
@@ -237,6 +246,36 @@ export default function InvoicePreviewScreen() {
               <Text style={styles.grandTotalValue}>{formatCurrency(invoice.total)}</Text>
             </View>
           </View>
+
+          {/* Payment Details */}
+          {(invoice.paidAmount !== undefined || invoice.paymentMode) && (
+            <View style={styles.paymentSection}>
+              <Text style={styles.sectionTitle}>Payment Details:</Text>
+              {invoice.paidAmount !== undefined && (
+                <View style={styles.paymentRow}>
+                  <Text style={styles.paymentLabel}>Paid Amount:</Text>
+                  <Text style={styles.paymentValue}>{formatCurrency(invoice.paidAmount)}</Text>
+                </View>
+              )}
+              {invoice.dueAmount !== undefined && invoice.dueAmount > 0 && (
+                <View style={styles.paymentRow}>
+                  <Text style={styles.paymentLabel}>Due Amount:</Text>
+                  <Text style={[styles.paymentValue, styles.dueAmount]}>{formatCurrency(invoice.dueAmount)}</Text>
+                </View>
+              )}
+              {invoice.paymentMode && (
+                <View style={styles.paymentRow}>
+                  <Text style={styles.paymentLabel}>Payment Mode:</Text>
+                  <Text style={styles.paymentValue}>{invoice.paymentMode}</Text>
+                </View>
+              )}
+              {invoice.isPaid && (
+                <View style={styles.paidStatus}>
+                  <Text style={styles.paidStatusText}>✓ PAID</Text>
+                </View>
+              )}
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -248,6 +287,14 @@ export default function InvoicePreviewScreen() {
             onPress={saveInvoice}
             variant="primary"
             disabled={saving}
+            style={styles.actionButton}
+          />
+        )}
+        {params.id && (
+          <CustomButton
+            title="Edit Invoice"
+            onPress={() => router.push(`/edit-invoice?id=${params.id}`)}
+            variant="secondary"
             style={styles.actionButton}
           />
         )}
@@ -319,10 +366,23 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 4,
   },
+  proprietaryName: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 2,
+  },
   shopAddress: {
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
+    marginTop: 2,
+  },
+  shopMobile: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 2,
   },
   shopGstin: {
     fontSize: 14,
@@ -363,6 +423,11 @@ const styles = StyleSheet.create({
   customerPhone: {
     fontSize: 14,
     color: '#666',
+  },
+  customerAddress: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
   },
   itemsTable: {
     marginBottom: 20,
@@ -462,5 +527,41 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#666',
     marginBottom: 24,
+  },
+  paymentSection: {
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
+  },
+  paymentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+  },
+  paymentLabel: {
+    fontSize: 16,
+    color: '#666',
+  },
+  paymentValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  dueAmount: {
+    color: '#FF3B30',
+    fontWeight: 'bold',
+  },
+  paidStatus: {
+    alignItems: 'center',
+    marginTop: 12,
+    padding: 8,
+    backgroundColor: '#E8F5E8',
+    borderRadius: 8,
+  },
+  paidStatusText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#34C759',
   },
 });
