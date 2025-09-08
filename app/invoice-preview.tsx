@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StorageService } from '@/utils/storage';
-import { generateInvoicePDF, shareInvoice } from '@/utils/pdfGenerator';
+import { generateInvoicePDF, shareInvoice, shareInvoiceToWhatsApp } from '@/utils/pdfGenerator';
 import { formatCurrency, formatDate } from '@/utils/calculations';
 import { Shop, Invoice } from '@/types';
 import CustomButton from '@/components/CustomButton';
@@ -22,6 +22,7 @@ export default function InvoicePreviewScreen() {
   const [shop, setShop] = useState<Shop | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // no auto-share anymore; actions are explicit
 
   useEffect(() => {
     loadData();
@@ -52,6 +53,8 @@ export default function InvoicePreviewScreen() {
     }
   };
 
+  // Removed auto-share on open to avoid unintended sending
+
   const saveInvoice = async () => {
     if (!invoice || params.id) return; // Already saved or no invoice
 
@@ -68,14 +71,40 @@ export default function InvoicePreviewScreen() {
     }
   };
 
-  const handleShare = async () => {
+  const handleSharePDF = async () => {
     if (!invoice || !shop) return;
-
     try {
       const pdfUri = await generateInvoicePDF(invoice, shop);
       await shareInvoice(pdfUri);
     } catch (error) {
-      Alert.alert('Error', 'Failed to generate or share invoice');
+      Alert.alert('Error', 'Failed to share PDF invoice');
+    }
+  };
+
+  const handleShareText = async () => {
+    if (!invoice || !shop) return;
+    if (!invoice.customerPhone) {
+      Alert.alert('Missing Phone', 'No customer phone number to send WhatsApp message.');
+      return;
+    }
+    try {
+      const lines: string[] = [];
+      lines.push(`${shop.name || 'Shop'}`);
+      lines.push('Estimated Bill');
+      lines.push(`Date: ${formatDate(invoice.date)}`);
+      lines.push('');
+      invoice.items.forEach((item) => {
+        const itemTotal = item.qty * item.unitPrice;
+        const discountAmount = (item.discount / 100) * itemTotal;
+        const net = itemTotal - discountAmount;
+        lines.push(`${item.name} x${item.qty} @ ${formatCurrency(item.unitPrice)}${item.discount ? ` (-${item.discount}%)` : ''} = ${formatCurrency(net)}`);
+      });
+      lines.push('');
+      lines.push(`Grand Total: ${formatCurrency(invoice.total)}`);
+      const message = lines.join('\n');
+      await shareInvoiceToWhatsApp(invoice.customerPhone, message);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to send text invoice');
     }
   };
 
@@ -116,7 +145,7 @@ export default function InvoicePreviewScreen() {
         >
           <ArrowLeft size={24} color="#FFFFFF" />
         </TouchableOpacity>
-        <Text style={styles.title}>Invoice Preview</Text>
+        <Text style={styles.title}>Estimated Bill</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.headerButton}
@@ -124,36 +153,43 @@ export default function InvoicePreviewScreen() {
           >
             <Download size={20} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={handleShare}
-          >
-            <Share size={20} color="#FFFFFF" />
-          </TouchableOpacity>
+          {/* Header share kept minimal; detailed actions at bottom */}
         </View>
       </View>
 
       <ScrollView style={styles.content}>
         <View style={styles.invoiceContainer}>
-          {/* Shop Header */}
-          <View style={styles.shopHeader}>
-            <Text style={styles.shopName}>{shop.name}</Text>
-            {shop.proprietaryName && (
-              <Text style={styles.proprietaryName}>Proprietor: {shop.proprietaryName}</Text>
-            )}
-            {shop.address && (
-              <Text style={styles.shopAddress}>{shop.address}</Text>
-            )}
-            {shop.mobileNo && (
-              <Text style={styles.shopMobile}>Mobile: {shop.mobileNo}</Text>
-            )}
-            {shop.gstin && (
-              <Text style={styles.shopGstin}>GSTIN: {shop.gstin}</Text>
-            )}
+          {/* Top Bar: Shop (left) and Customer (right) */}
+          <View style={styles.topBar}>
+            <View style={styles.shopBlock}>
+              <Text style={styles.shopName}>{shop.name}</Text>
+              {shop.proprietaryName && (
+                <Text style={styles.proprietaryName}>Proprietor: {shop.proprietaryName}</Text>
+              )}
+              {shop.address && (
+                <Text style={styles.shopAddress}>{shop.address}</Text>
+              )}
+              {shop.mobileNo && (
+                <Text style={styles.shopMobile}>Mobile: {shop.mobileNo}</Text>
+              )}
+              {shop.gstin && (
+                <Text style={styles.shopGstin}>GSTIN: {shop.gstin}</Text>
+              )}
+            </View>
+            <View style={styles.customerBlock}>
+              <Text style={styles.sectionTitle}>Customer</Text>
+              <Text style={styles.customerName}>{invoice.customerName}</Text>
+              {invoice.customerPhone && (
+                <Text style={styles.customerPhone}>Phone: {invoice.customerPhone}</Text>
+              )}
+              {invoice.customerAddress && (
+                <Text style={styles.customerAddress}>Address: {invoice.customerAddress}</Text>
+              )}
+            </View>
           </View>
 
-          {/* Invoice Info */}
-          <View style={styles.invoiceInfo}>
+          {/* Invoice Info row under heading */}
+          <View style={styles.invoiceInfoRow}>
             <View style={styles.invoiceRow}>
               <Text style={styles.label}>Invoice No:</Text>
               <Text style={styles.value}>{invoice.invoiceNumber || 'PREVIEW'}</Text>
@@ -162,18 +198,6 @@ export default function InvoicePreviewScreen() {
               <Text style={styles.label}>Date:</Text>
               <Text style={styles.value}>{formatDate(invoice.date)}</Text>
             </View>
-          </View>
-
-          {/* Customer Info */}
-          <View style={styles.customerInfo}>
-            <Text style={styles.sectionTitle}>Bill To:</Text>
-            <Text style={styles.customerName}>{invoice.customerName}</Text>
-            {invoice.customerPhone && (
-              <Text style={styles.customerPhone}>Phone: {invoice.customerPhone}</Text>
-            )}
-            {invoice.customerAddress && (
-              <Text style={styles.customerAddress}>Address: {invoice.customerAddress}</Text>
-            )}
           </View>
 
           {/* Items Table */}
@@ -299,8 +323,14 @@ export default function InvoicePreviewScreen() {
           />
         )}
         <CustomButton
-          title="Share Invoice"
-          onPress={handleShare}
+          title="Send Text Invoice (WhatsApp)"
+          onPress={handleShareText}
+          variant="secondary"
+          style={styles.actionButton}
+        />
+        <CustomButton
+          title="Send PDF Invoice"
+          onPress={handleSharePDF}
           variant="secondary"
           style={styles.actionButton}
         />
@@ -353,12 +383,23 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  shopHeader: {
-    alignItems: 'center',
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     borderBottomWidth: 2,
     borderBottomColor: '#333',
     paddingBottom: 16,
-    marginBottom: 20,
+    marginBottom: 12,
+  },
+  shopBlock: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  customerBlock: {
+    flex: 1,
+    paddingLeft: 8,
+    alignItems: 'flex-end',
   },
   shopName: {
     fontSize: 24,
@@ -389,8 +430,10 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 4,
   },
-  invoiceInfo: {
-    marginBottom: 20,
+  invoiceInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
   invoiceRow: {
     flexDirection: 'row',
@@ -405,9 +448,6 @@ const styles = StyleSheet.create({
   value: {
     fontSize: 16,
     color: '#666',
-  },
-  customerInfo: {
-    marginBottom: 20,
   },
   sectionTitle: {
     fontSize: 16,

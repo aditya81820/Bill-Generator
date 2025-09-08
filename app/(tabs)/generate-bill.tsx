@@ -49,19 +49,24 @@ export default function GenerateBillScreen() {
   
   // Billing Details
   const [billDiscount, setBillDiscount] = useState(0);
+  const [billDiscountInput, setBillDiscountInput] = useState('');
   const [billDiscountType, setBillDiscountType] = useState<'amount' | 'percentage'>('percentage');
   const [taxPercent, setTaxPercent] = useState(0);
+  const [taxPercentInput, setTaxPercentInput] = useState('');
   const [applyTax, setApplyTax] = useState(false);
   const [otherCharges, setOtherCharges] = useState(0);
+  const [otherChargesInput, setOtherChargesInput] = useState('');
   
   // Payment Details
   const [paidAmount, setPaidAmount] = useState(0);
+  const [paidAmountInput, setPaidAmountInput] = useState('');
   const [paymentMode, setPaymentMode] = useState('Cash');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   
   // Product Management
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showCreateProduct, setShowCreateProduct] = useState(false);
+  const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   
   // Product search and suggestions
   const [productSearchQuery, setProductSearchQuery] = useState('');
@@ -74,6 +79,16 @@ export default function GenerateBillScreen() {
     unitPrice: 0,
     discount: 0,
   });
+  // String inputs for newProduct to allow clearing
+  const [newProductQtyInput, setNewProductQtyInput] = useState('1');
+  const [newProductUnitPriceInput, setNewProductUnitPriceInput] = useState('');
+  const [newProductDiscountInput, setNewProductDiscountInput] = useState('');
+
+  // Legacy inline item add states (to avoid lint errors and allow clearing)
+  const [newItemName, setNewItemName] = useState('');
+  const [newItemQty, setNewItemQty] = useState('1');
+  const [newItemPrice, setNewItemPrice] = useState('');
+  const [newItemDiscount, setNewItemDiscount] = useState('0');
   
   // New product creation form
   const [createProductForm, setCreateProductForm] = useState({
@@ -81,6 +96,67 @@ export default function GenerateBillScreen() {
     price: 0,
     defaultDiscount: 0,
   });
+  const [createProductPriceInput, setCreateProductPriceInput] = useState('');
+  const [createProductDiscountInput, setCreateProductDiscountInput] = useState('');
+
+  // New customer creation form
+  const [createCustomerForm, setCreateCustomerForm] = useState({
+    name: '',
+    phone: '',
+    address: '',
+  });
+
+  // Pick contact and populate Add Customer modal form
+  const pickContactForNewCustomer = async () => {
+    try {
+      const { status: currentStatus } = await Contacts.getPermissionsAsync();
+      let finalStatus = currentStatus;
+      if (currentStatus !== 'granted') {
+        const { status: requestStatus } = await Contacts.requestPermissionsAsync();
+        finalStatus = requestStatus;
+      }
+      if (finalStatus !== 'granted') {
+        Alert.alert('Permission Required', 'Contacts permission is needed. Enable it in settings.');
+        return;
+      }
+      const { data } = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
+        sort: Contacts.SortTypes.FirstName,
+      });
+      if (!data.length) {
+        Alert.alert('No Contacts', 'No contacts found.');
+        return;
+      }
+      const options = data
+        .filter(c => c.name && c.phoneNumbers?.length)
+        .slice(0, 10)
+        .map(c => ({
+          name: c.name!,
+          phone: c.phoneNumbers?.[0]?.number?.replace(/[^0-9+]/g, '') || '',
+        }));
+      if (!options.length) {
+        Alert.alert('No Contacts', 'No contacts with phone numbers found.');
+        return;
+      }
+      Alert.alert(
+        'Select Contact',
+        'Choose a contact to add',
+        [
+          ...options.map((opt) => ({
+            text: `${opt.name} - ${opt.phone}`,
+            onPress: () => setCreateCustomerForm(prev => ({
+              ...prev,
+              name: opt.name,
+              phone: opt.phone,
+            })),
+          })),
+          { text: 'Cancel', onPress: () => {} },
+        ]
+      );
+    } catch (e) {
+      Alert.alert('Error', 'Failed to access contacts.');
+    }
+  };
 
   const paymentModes = ['Cash', 'Card', 'UPI', 'Bank Transfer', 'Cheque'];
 
@@ -95,6 +171,11 @@ export default function GenerateBillScreen() {
     ]);
     setProducts(productList);
     setCustomers(customerList);
+    // Initialize input strings from defaults
+    setBillDiscountInput(billDiscount ? String(billDiscount) : '');
+    setTaxPercentInput(taxPercent ? String(taxPercent) : '');
+    setOtherChargesInput(otherCharges ? String(otherCharges) : '');
+    setPaidAmountInput(paidAmount ? String(paidAmount) : '');
   };
 
   // Customer Management
@@ -116,6 +197,38 @@ export default function GenerateBillScreen() {
     setCustomerPhone(customer.phone || '');
     setCustomerAddress(customer.address || '');
     setShowCustomerSuggestions(false);
+  };
+
+  const openAddCustomerModal = () => {
+    setCreateCustomerForm({ name: customerName.trim(), phone: '', address: '' });
+    setShowCustomerSuggestions(false);
+    setShowAddCustomerModal(true);
+  };
+
+  const saveNewCustomer = async () => {
+    if (!createCustomerForm.name.trim()) {
+      Alert.alert('Error', 'Please enter customer name');
+      return;
+    }
+    try {
+      const saved = await StorageService.addCustomer({
+        name: createCustomerForm.name.trim(),
+        phone: createCustomerForm.phone.trim() || undefined,
+        address: createCustomerForm.address.trim() || undefined,
+      });
+      // Update local state and pick this customer
+      setCustomers(prev => {
+        const exists = prev.find(c => c.id === saved.id);
+        return exists ? prev.map(c => (c.id === saved.id ? saved : c)) : [...prev, saved];
+      });
+      setCustomerName(saved.name);
+      setCustomerPhone(saved.phone || '');
+      setCustomerAddress(saved.address || '');
+      setShowAddCustomerModal(false);
+      Alert.alert('Success', 'Customer saved');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to save customer');
+    }
   };
 
   const requestContactsPermission = async () => {
@@ -207,6 +320,12 @@ export default function GenerateBillScreen() {
       unitPrice: product.price,
       discount: product.defaultDiscount,
     });
+    // Sync string inputs so values are visible immediately
+    setNewProductQtyInput('1');
+    setNewProductUnitPriceInput(product.price?.toString() || '');
+    setNewProductDiscountInput(
+      typeof product.defaultDiscount === 'number' ? product.defaultDiscount.toString() : ''
+    );
     setProductSearchQuery(product.name);
     setShowSuggestions(false);
   };
@@ -217,6 +336,8 @@ export default function GenerateBillScreen() {
       price: 0,
       defaultDiscount: 0,
     });
+    setCreateProductPriceInput('');
+    setCreateProductDiscountInput('');
     setShowSuggestions(false);
     setShowCreateProduct(true);
   };
@@ -271,6 +392,9 @@ export default function GenerateBillScreen() {
 
     setCartItems([...cartItems, cartItem]);
     setNewProduct({ name: '', qty: 1, unitPrice: 0, discount: 0 });
+    setNewProductQtyInput('1');
+    setNewProductUnitPriceInput('');
+    setNewProductDiscountInput('');
     setShowAddProduct(false);
   };
 
@@ -373,12 +497,12 @@ export default function GenerateBillScreen() {
 
     router.push({
       pathname: '/invoice-preview',
-      params: { data: JSON.stringify(invoiceData) },
+      params: { data: JSON.stringify(invoiceData), autoShare: customerPhone ? '1' : undefined },
     });
   };
 
   return (
-    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+    <ScrollView style={styles.container} keyboardShouldPersistTaps="always">
       <View style={styles.header}>
         <Text style={styles.title}>Generate New Bill</Text>
       </View>
@@ -395,54 +519,38 @@ export default function GenerateBillScreen() {
               required
               placeholder="Enter customer name"
             />
-            {showCustomerSuggestions && filteredCustomers.length > 0 && (
+            {showCustomerSuggestions && (
               <View style={styles.suggestionsContainer}>
-                <FlatList
-                  data={filteredCustomers.slice(0, 5)}
-                  keyExtractor={(item) => item.id}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={styles.suggestionItem}
-                      onPress={() => selectCustomer(item)}
-                    >
-                      <User size={16} color="#007AFF" />
-                      <View style={styles.suggestionDetails}>
-                        <Text style={styles.suggestionName}>{item.name}</Text>
-                        {item.phone && (
-                          <Text style={styles.suggestionPhone}>{item.phone}</Text>
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  )}
-                />
+                {filteredCustomers.length > 0 && (
+                  <FlatList
+                    data={filteredCustomers.slice(0, 5)}
+                    keyExtractor={(item) => item.id}
+                    keyboardShouldPersistTaps="always"
+                    scrollEnabled={false}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.suggestionItem}
+                        onPress={() => selectCustomer(item)}
+                        onPressIn={() => selectCustomer(item)}
+                      >
+                        <User size={16} color="#007AFF" />
+                        <View style={styles.suggestionDetails}>
+                          <Text style={styles.suggestionName}>{item.name}</Text>
+                          {item.phone && (
+                            <Text style={styles.suggestionPhone}>{item.phone}</Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  />
+                )}
+                <TouchableOpacity style={styles.addNewProductOption} onPress={openAddCustomerModal}>
+                  <Plus size={16} color="#34C759" />
+                  <Text style={styles.addNewActionText}>Add New Customer{customerName ? `: "${customerName}"` : ''}</Text>
+                </TouchableOpacity>
               </View>
             )}
           </View>
-          
-          <View style={styles.phoneInputContainer}>
-            <CustomInput
-              label="Phone Number"
-              value={customerPhone}
-              onChangeText={setCustomerPhone}
-              keyboardType="phone-pad"
-              placeholder="Enter phone number"
-            />
-            <TouchableOpacity
-              style={styles.contactButton}
-              onPress={requestContactsPermission}
-            >
-              <Phone size={20} color="#007AFF" />
-            </TouchableOpacity>
-          </View>
-          
-          <CustomInput
-            label="Customer Address"
-            value={customerAddress}
-            onChangeText={setCustomerAddress}
-            placeholder="Enter customer address (optional)"
-            multiline
-            numberOfLines={2}
-          />
         </View>
       </View>
 
@@ -559,8 +667,11 @@ export default function GenerateBillScreen() {
             </View>
             <CustomInput
               label=""
-              value={billDiscount.toString()}
-              onChangeText={(text) => setBillDiscount(parseFloat(text) || 0)}
+              value={billDiscountInput}
+              onChangeText={(text) => {
+                setBillDiscountInput(text);
+                setBillDiscount(text === '' ? 0 : parseFloat(text));
+              }}
               keyboardType="numeric"
               placeholder={billDiscountType === 'percentage' ? 'Enter percentage' : 'Enter amount'}
             />
@@ -579,8 +690,11 @@ export default function GenerateBillScreen() {
             {applyTax && (
               <CustomInput
                 label="GST Rate (%)"
-                value={taxPercent.toString()}
-                onChangeText={(text) => setTaxPercent(parseFloat(text) || 0)}
+                value={taxPercentInput}
+                onChangeText={(text) => {
+                  setTaxPercentInput(text);
+                  setTaxPercent(text === '' ? 0 : parseFloat(text));
+                }}
                 keyboardType="numeric"
                 placeholder="Enter GST percentage"
               />
@@ -588,8 +702,11 @@ export default function GenerateBillScreen() {
             
             <CustomInput
               label="Other Charges"
-              value={otherCharges.toString()}
-              onChangeText={(text) => setOtherCharges(parseFloat(text) || 0)}
+              value={otherChargesInput}
+              onChangeText={(text) => {
+                setOtherChargesInput(text);
+                setOtherCharges(text === '' ? 0 : parseFloat(text));
+              }}
               keyboardType="numeric"
               placeholder="Additional charges (optional)"
             />
@@ -609,8 +726,11 @@ export default function GenerateBillScreen() {
             
             <CustomInput
               label="Paid Amount"
-              value={paidAmount.toString()}
-              onChangeText={(text) => setPaidAmount(parseFloat(text) || 0)}
+              value={paidAmountInput}
+              onChangeText={(text) => {
+                setPaidAmountInput(text);
+                setPaidAmount(text === '' ? 0 : parseFloat(text));
+              }}
               keyboardType="numeric"
               placeholder="Enter paid amount"
             />
@@ -722,13 +842,13 @@ export default function GenerateBillScreen() {
               setShowSuggestions(false);
               setNewProduct({ name: '', qty: 1, unitPrice: 0, discount: 0 });
             }}>
-              <Text style={styles.cancelButton}>Cancel</Text>
+              <Text style={styles.modalCancelText}>Cancel</Text>
             </TouchableOpacity>
           </View>
           
           <View style={styles.modalContent}>
             {/* Product Details Form */}
-            <ScrollView style={styles.productForm}>
+            <ScrollView style={styles.productForm} keyboardShouldPersistTaps="always">
               {/* Product Name with Integrated Suggestions */}
               <View style={styles.productInputContainer}>
                 <CustomInput
@@ -738,6 +858,7 @@ export default function GenerateBillScreen() {
                     setNewProduct({ ...newProduct, name: text });
                     handleProductSearch(text);
                   }}
+                  autoFocus
                   required
                   placeholder="Enter or search product name"
                 />
@@ -749,10 +870,12 @@ export default function GenerateBillScreen() {
                       <FlatList
                         data={filteredProducts}
                         keyExtractor={(item) => item.id.toString()}
+                        scrollEnabled={false}
                         renderItem={({ item }) => (
                           <TouchableOpacity
                             style={styles.suggestionItem}
                             onPress={() => selectProduct(item)}
+                            onPressIn={() => selectProduct(item)}
                           >
                             <Package size={16} color="#007AFF" />
                             <View style={styles.suggestionDetails}>
@@ -761,7 +884,6 @@ export default function GenerateBillScreen() {
                             </View>
                           </TouchableOpacity>
                         )}
-                        maxHeight={200}
                       />
                     ) : (
                       <View style={styles.noSuggestions}>
@@ -776,7 +898,7 @@ export default function GenerateBillScreen() {
                         onPress={handleAddNewProduct}
                       >
                         <Plus size={16} color="#34C759" />
-                        <Text style={styles.addNewProductText}>
+                        <Text style={styles.addNewActionText}>
                           Add new product: "{newProduct.name}"
                         </Text>
                       </TouchableOpacity>
@@ -786,23 +908,32 @@ export default function GenerateBillScreen() {
               </View>
               <CustomInput
                 label="Quantity"
-                value={newProduct.qty.toString()}
-                onChangeText={(text) => setNewProduct({ ...newProduct, qty: parseInt(text) || 1 })}
+                value={newProductQtyInput}
+                onChangeText={(text) => {
+                  setNewProductQtyInput(text);
+                  setNewProduct({ ...newProduct, qty: text === '' ? 0 : parseInt(text) || 0 });
+                }}
                 keyboardType="numeric"
                 required
               />
               <CustomInput
                 label="Unit Price"
-                value={newProduct.unitPrice.toString()}
-                onChangeText={(text) => setNewProduct({ ...newProduct, unitPrice: parseFloat(text) || 0 })}
+                value={newProductUnitPriceInput}
+                onChangeText={(text) => {
+                  setNewProductUnitPriceInput(text);
+                  setNewProduct({ ...newProduct, unitPrice: text === '' ? 0 : parseFloat(text) || 0 });
+                }}
                 keyboardType="numeric"
                 required
                 placeholder="0.00"
               />
               <CustomInput
                 label="Item Discount (%)"
-                value={newProduct.discount.toString()}
-                onChangeText={(text) => setNewProduct({ ...newProduct, discount: parseFloat(text) || 0 })}
+                value={newProductDiscountInput}
+                onChangeText={(text) => {
+                  setNewProductDiscountInput(text);
+                  setNewProduct({ ...newProduct, discount: text === '' ? 0 : parseFloat(text) || 0 });
+                }}
                 keyboardType="numeric"
                 placeholder="0"
               />
@@ -832,7 +963,7 @@ export default function GenerateBillScreen() {
               setShowCreateProduct(false);
               setCreateProductForm({ name: '', price: 0, defaultDiscount: 0 });
             }}>
-              <Text style={styles.cancelButton}>Cancel</Text>
+              <Text style={styles.modalCancelText}>Cancel</Text>
             </TouchableOpacity>
           </View>
           
@@ -841,21 +972,28 @@ export default function GenerateBillScreen() {
               label="Product Name"
               value={createProductForm.name}
               onChangeText={(text) => setCreateProductForm({ ...createProductForm, name: text })}
+              autoFocus
               required
               placeholder="Enter product name"
             />
             <CustomInput
               label="Default Price"
-              value={createProductForm.price.toString()}
-              onChangeText={(text) => setCreateProductForm({ ...createProductForm, price: parseFloat(text) || 0 })}
+              value={createProductPriceInput}
+              onChangeText={(text) => {
+                setCreateProductPriceInput(text);
+                setCreateProductForm({ ...createProductForm, price: text === '' ? 0 : parseFloat(text) || 0 });
+              }}
               keyboardType="numeric"
               required
               placeholder="0.00"
             />
             <CustomInput
               label="Default Discount (%)"
-              value={createProductForm.defaultDiscount.toString()}
-              onChangeText={(text) => setCreateProductForm({ ...createProductForm, defaultDiscount: parseFloat(text) || 0 })}
+              value={createProductDiscountInput}
+              onChangeText={(text) => {
+                setCreateProductDiscountInput(text);
+                setCreateProductForm({ ...createProductForm, defaultDiscount: text === '' ? 0 : parseFloat(text) || 0 });
+              }}
               keyboardType="numeric"
               placeholder="0"
             />
@@ -865,6 +1003,62 @@ export default function GenerateBillScreen() {
             <CustomButton
               title="Create Product"
               onPress={saveNewProduct}
+              variant="primary"
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add New Customer Modal */}
+      <Modal
+        visible={showAddCustomerModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowAddCustomerModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Add New Customer</Text>
+            <TouchableOpacity onPress={() => setShowAddCustomerModal(false)}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalContent} keyboardShouldPersistTaps="always">
+            <CustomInput
+              label="Customer Name"
+              value={createCustomerForm.name}
+              onChangeText={(text) => setCreateCustomerForm({ ...createCustomerForm, name: text })}
+              autoFocus
+              required
+              placeholder="Enter customer name"
+            />
+            <View style={styles.phoneInputContainer}>
+              <CustomInput
+                label="Phone Number"
+                value={createCustomerForm.phone}
+                onChangeText={(text) => setCreateCustomerForm({ ...createCustomerForm, phone: text })}
+                keyboardType="phone-pad"
+                placeholder="Enter phone number (optional)"
+              />
+              <TouchableOpacity style={styles.contactButton} onPress={pickContactForNewCustomer}>
+                <Phone size={20} color="#007AFF" />
+              </TouchableOpacity>
+            </View>
+            <CustomInput
+              label="Address"
+              value={createCustomerForm.address}
+              onChangeText={(text) => setCreateCustomerForm({ ...createCustomerForm, address: text })}
+              multiline
+              numberOfLines={2}
+              placeholder="Enter address (optional)"
+            />
+          </ScrollView>
+
+          <View style={styles.modalActions}>
+            <CustomButton
+              title="Save Customer"
+              onPress={saveNewCustomer}
               variant="primary"
             />
           </View>
@@ -1396,7 +1590,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
-  cancelButton: {
+  modalCancelText: {
     fontSize: 16,
     color: '#007AFF',
   },
@@ -1439,7 +1633,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E5E5EA',
   },
-  addNewProductText: {
+  addNewActionText: {
     fontSize: 14,
     color: '#34C759',
     fontWeight: '500',
