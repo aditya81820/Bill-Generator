@@ -30,8 +30,9 @@ export const calculateBill = (
   // Calculate tax
   const taxAmount = (taxPercent / 100) * afterBillDiscount;
 
-  // Calculate grand total
-  const grandTotal = afterBillDiscount + taxAmount + otherCharges;
+  // Calculate grand total and round to nearest rupee
+  const grandTotalRaw = afterBillDiscount + taxAmount + otherCharges;
+  const grandTotal = Math.round(grandTotalRaw);
 
   return {
     subtotal,

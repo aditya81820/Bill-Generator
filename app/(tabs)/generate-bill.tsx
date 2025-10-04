@@ -68,9 +68,8 @@ export default function GenerateBillScreen() {
   const [showCreateProduct, setShowCreateProduct] = useState(false);
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   
-  // Product search and suggestions
+  // Product search and suggestions - simplified
   const [productSearchQuery, setProductSearchQuery] = useState('');
-  const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   
   const [newProduct, setNewProduct] = useState({
@@ -79,6 +78,7 @@ export default function GenerateBillScreen() {
     unitPrice: 0,
     discount: 0,
   });
+  
   // String inputs for newProduct to allow clearing
   const [newProductQtyInput, setNewProductQtyInput] = useState('1');
   const [newProductUnitPriceInput, setNewProductUnitPriceInput] = useState('');
@@ -106,57 +106,9 @@ export default function GenerateBillScreen() {
     address: '',
   });
 
-  // Pick contact and populate Add Customer modal form
-  const pickContactForNewCustomer = async () => {
-    try {
-      const { status: currentStatus } = await Contacts.getPermissionsAsync();
-      let finalStatus = currentStatus;
-      if (currentStatus !== 'granted') {
-        const { status: requestStatus } = await Contacts.requestPermissionsAsync();
-        finalStatus = requestStatus;
-      }
-      if (finalStatus !== 'granted') {
-        Alert.alert('Permission Required', 'Contacts permission is needed. Enable it in settings.');
-        return;
-      }
-      const { data } = await Contacts.getContactsAsync({
-        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
-        sort: Contacts.SortTypes.FirstName,
-      });
-      if (!data.length) {
-        Alert.alert('No Contacts', 'No contacts found.');
-        return;
-      }
-      const options = data
-        .filter(c => c.name && c.phoneNumbers?.length)
-        .slice(0, 10)
-        .map(c => ({
-          name: c.name!,
-          phone: c.phoneNumbers?.[0]?.number?.replace(/[^0-9+]/g, '') || '',
-        }));
-      if (!options.length) {
-        Alert.alert('No Contacts', 'No contacts with phone numbers found.');
-        return;
-      }
-      Alert.alert(
-        'Select Contact',
-        'Choose a contact to add',
-        [
-          ...options.map((opt) => ({
-            text: `${opt.name} - ${opt.phone}`,
-            onPress: () => setCreateCustomerForm(prev => ({
-              ...prev,
-              name: opt.name,
-              phone: opt.phone,
-            })),
-          })),
-          { text: 'Cancel', onPress: () => {} },
-        ]
-      );
-    } catch (e) {
-      Alert.alert('Error', 'Failed to access contacts.');
-    }
-  };
+  // Edit item functionality
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editingItem, setEditingItem] = useState<CartItem | null>(null);
 
   const paymentModes = ['Cash', 'Card', 'UPI', 'Bank Transfer', 'Cheque'];
 
@@ -233,19 +185,16 @@ export default function GenerateBillScreen() {
 
   const requestContactsPermission = async () => {
     try {
-      // First check current permission status
       const { status: currentStatus } = await Contacts.getPermissionsAsync();
       
       let finalStatus = currentStatus;
       
-      // If permission is not granted, request it
       if (currentStatus !== 'granted') {
         const { status: requestStatus } = await Contacts.requestPermissionsAsync();
         finalStatus = requestStatus;
       }
       
       if (finalStatus === 'granted') {
-        // Permission granted, fetch contacts
         const { data } = await Contacts.getContactsAsync({
           fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
           sort: Contacts.SortTypes.FirstName,
@@ -285,7 +234,6 @@ export default function GenerateBillScreen() {
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Open Settings', onPress: () => {
-              // On Android, we can't directly open settings, but we can inform the user
               Alert.alert('Enable Permission', 'Go to Settings > Apps > Bill Generator > Permissions > Contacts and enable access.');
             }}
           ]
@@ -297,18 +245,17 @@ export default function GenerateBillScreen() {
     }
   };
 
-  // Product search and suggestion handlers
+  // Simplified product search - no suggestions dropdown
   const handleProductSearch = (text: string) => {
     setProductSearchQuery(text);
+    setNewProduct({ ...newProduct, name: text });
     
     if (text.length > 0) {
       const filtered = products.filter(product =>
         product.name.toLowerCase().includes(text.toLowerCase())
       );
       setFilteredProducts(filtered);
-      setShowSuggestions(true);
     } else {
-      setShowSuggestions(false);
       setFilteredProducts([]);
     }
   };
@@ -320,14 +267,12 @@ export default function GenerateBillScreen() {
       unitPrice: product.price,
       discount: product.defaultDiscount,
     });
-    // Sync string inputs so values are visible immediately
     setNewProductQtyInput('1');
     setNewProductUnitPriceInput(product.price?.toString() || '');
     setNewProductDiscountInput(
       typeof product.defaultDiscount === 'number' ? product.defaultDiscount.toString() : ''
     );
     setProductSearchQuery(product.name);
-    setShowSuggestions(false);
   };
 
   const handleAddNewProduct = () => {
@@ -338,7 +283,6 @@ export default function GenerateBillScreen() {
     });
     setCreateProductPriceInput('');
     setCreateProductDiscountInput('');
-    setShowSuggestions(false);
     setShowCreateProduct(true);
   };
 
@@ -355,17 +299,13 @@ export default function GenerateBillScreen() {
         defaultDiscount: createProductForm.defaultDiscount,
       });
       
-      // Add to local products list
       setProducts([...products, newProd]);
-      
-      // Select the newly created product
       setNewProduct({
         name: newProd.name,
         qty: 1,
         unitPrice: newProd.price,
         discount: newProd.defaultDiscount,
       });
-      
       setProductSearchQuery(newProd.name);
       setCreateProductForm({ name: '', price: 0, defaultDiscount: 0 });
       setShowCreateProduct(false);
@@ -396,30 +336,6 @@ export default function GenerateBillScreen() {
     setNewProductUnitPriceInput('');
     setNewProductDiscountInput('');
     setShowAddProduct(false);
-  };
-
-  const addNewItemInline = () => {
-    if (!newItemName.trim() || !newItemPrice.trim()) {
-      Alert.alert('Error', 'Please enter product name and price');
-      return;
-    }
-
-    const newItem: CartItem = {
-      id: Date.now().toString(),
-      name: newItemName.trim(),
-      qty: parseInt(newItemQty) || 1,
-      unitPrice: parseFloat(newItemPrice) || 0,
-      discount: parseFloat(newItemDiscount) || 0,
-    };
-
-    setCartItems([...cartItems, newItem]);
-    
-    // Reset form
-    setNewItemName('');
-    setNewItemQty('1');
-    setNewItemPrice('');
-    setNewItemDiscount('0');
-    setShowProductSuggestions(false);
   };
 
   const updateCartItem = (id: string, updates: Partial<CartItem>) => {
@@ -501,6 +417,58 @@ export default function GenerateBillScreen() {
     });
   };
 
+  // Pick contact and populate Add Customer modal form
+  const pickContactForNewCustomer = async () => {
+    try {
+      const { status: currentStatus } = await Contacts.getPermissionsAsync();
+      let finalStatus = currentStatus;
+      if (currentStatus !== 'granted') {
+        const { status: requestStatus } = await Contacts.requestPermissionsAsync();
+        finalStatus = requestStatus;
+      }
+      if (finalStatus !== 'granted') {
+        Alert.alert('Permission Required', 'Contacts permission is needed. Enable it in settings.');
+        return;
+      }
+      const { data } = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
+        sort: Contacts.SortTypes.FirstName,
+      });
+      if (!data.length) {
+        Alert.alert('No Contacts', 'No contacts found.');
+        return;
+      }
+      const options = data
+        .filter(c => c.name && c.phoneNumbers?.length)
+        .slice(0, 10)
+        .map(c => ({
+          name: c.name!,
+          phone: c.phoneNumbers?.[0]?.number?.replace(/[^0-9+]/g, '') || '',
+        }));
+      if (!options.length) {
+        Alert.alert('No Contacts', 'No contacts with phone numbers found.');
+        return;
+      }
+      Alert.alert(
+        'Select Contact',
+        'Choose a contact to add',
+        [
+          ...options.map((opt) => ({
+            text: `${opt.name} - ${opt.phone}`,
+            onPress: () => setCreateCustomerForm(prev => ({
+              ...prev,
+              name: opt.name,
+              phone: opt.phone,
+            })),
+          })),
+          { text: 'Cancel', onPress: () => {} },
+        ]
+      );
+    } catch (e) {
+      Alert.alert('Error', 'Failed to access contacts.');
+    }
+  };
+
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="always">
       <View style={styles.header}>
@@ -520,41 +488,40 @@ export default function GenerateBillScreen() {
               placeholder="Enter customer name"
             />
             {showCustomerSuggestions && (
-  <View style={styles.suggestionsContainer}>
-    <ScrollView 
-      style={styles.scrollableSuggestions}
-      nestedScrollEnabled={true}
-      keyboardShouldPersistTaps="always"
-    >
-      {filteredCustomers.map((item) => (
-        <TouchableOpacity
-          key={item.id}
-          style={styles.suggestionItem}
-          onPress={() => selectCustomer(item)}
-        >
-          <User size={16} color="#007AFF" />
-          <View style={styles.suggestionDetails}>
-            <Text style={styles.suggestionName}>{item.name}</Text>
-            {item.phone && (
-              <Text style={styles.suggestionPhone}>{item.phone}</Text>
+              <View style={styles.suggestionsContainer}>
+                <ScrollView 
+                  style={styles.scrollableSuggestions}
+                  nestedScrollEnabled={true}
+                  keyboardShouldPersistTaps="always"
+                >
+                  {filteredCustomers.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.suggestionItem}
+                      onPress={() => selectCustomer(item)}
+                    >
+                      <User size={16} color="#007AFF" />
+                      <View style={styles.suggestionDetails}>
+                        <Text style={styles.suggestionName}>{item.name}</Text>
+                        {item.phone && (
+                          <Text style={styles.suggestionPhone}>{item.phone}</Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                  
+                  <TouchableOpacity 
+                    style={styles.addNewProductOption} 
+                    onPress={openAddCustomerModal}
+                  >
+                    <Plus size={16} color="#34C759" />
+                    <Text style={styles.addNewActionText}>
+                      Add New Customer{customerName ? `: "${customerName}"` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
             )}
-          </View>
-        </TouchableOpacity>
-      ))}
-      
-      {/* Add New Customer Option */}
-      <TouchableOpacity 
-        style={styles.addNewProductOption} 
-        onPress={openAddCustomerModal}
-      >
-        <Plus size={16} color="#34C759" />
-        <Text style={styles.addNewActionText}>
-          Add New Customer{customerName ? `: "${customerName}"` : ''}
-        </Text>
-      </TouchableOpacity>
-    </ScrollView>
-  </View>
-)}
           </View>
         </View>
       </View>
@@ -568,6 +535,8 @@ export default function GenerateBillScreen() {
             onPress={() => {
               setShowAddProduct(true);
               setNewProduct({ name: '', qty: 1, unitPrice: 0, discount: 0 });
+              setProductSearchQuery('');
+              setFilteredProducts([]);
             }}
           >
             <Plus size={20} color="#FFFFFF" />
@@ -844,7 +813,6 @@ export default function GenerateBillScreen() {
             <TouchableOpacity onPress={() => {
               setShowAddProduct(false);
               setProductSearchQuery('');
-              setShowSuggestions(false);
               setNewProduct({ name: '', qty: 1, unitPrice: 0, discount: 0 });
             }}>
               <Text style={styles.modalCancelText}>Cancel</Text>
@@ -852,65 +820,57 @@ export default function GenerateBillScreen() {
           </View>
           
           <View style={styles.modalContent}>
-            {/* Product Details Form */}
             <ScrollView style={styles.productForm} keyboardShouldPersistTaps="always">
-              {/* Product Name with Integrated Suggestions */}
-              <View style={styles.productInputContainer}>
-                <CustomInput
-                  label="Product Name"
-                  value={newProduct.name}
-                  onChangeText={(text) => {
-                    setNewProduct({ ...newProduct, name: text });
-                    handleProductSearch(text);
-                  }}
-                  autoFocus
-                  required
-                  placeholder="Enter or search product name"
-                />
-                
-                {/* Product Suggestions Dropdown */}
-                {showSuggestions && newProduct.name.length > 0 && (
-                  <View style={styles.suggestionsContainer}>
-                    {filteredProducts.length > 0 ? (
-                      <FlatList
-                        data={filteredProducts}
-                        keyExtractor={(item) => item.id.toString()}
-                        scrollEnabled={false}
-                        renderItem={({ item }) => (
-                          <TouchableOpacity
-                            style={styles.suggestionItem}
-                            onPress={() => selectProduct(item)}
-                            onPressIn={() => selectProduct(item)}
-                          >
-                            <Package size={16} color="#007AFF" />
-                            <View style={styles.suggestionDetails}>
-                              <Text style={styles.suggestionName}>{item.name}</Text>
-                              <Text style={styles.suggestionPrice}>{formatCurrency(item.price)}</Text>
-                            </View>
-                          </TouchableOpacity>
-                        )}
-                      />
-                    ) : (
-                      <View style={styles.noSuggestions}>
-                        <Text style={styles.noSuggestionsText}>No products found</Text>
-                      </View>
-                    )}
-                    
-                    {/* Add New Product Option */}
-                    {newProduct.name.length > 0 && (
+              {/* Product Name Input */}
+              <CustomInput
+                label="Product Name"
+                value={newProduct.name}
+                onChangeText={handleProductSearch}
+                autoFocus
+                required
+                placeholder="Enter product name"
+              />
+              
+              {/* Quick Product Selection */}
+              {filteredProducts.length > 0 && (
+                <View style={styles.quickProductsContainer}>
+                  <Text style={styles.quickProductsTitle}>Quick Select:</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickProductsScroll}>
+                    {filteredProducts.map((product) => (
                       <TouchableOpacity
-                        style={styles.addNewProductOption}
-                        onPress={handleAddNewProduct}
+                        key={product.id}
+                        style={styles.quickProductItem}
+                        onPress={() => selectProduct(product)}
                       >
-                        <Plus size={16} color="#34C759" />
-                        <Text style={styles.addNewActionText}>
-                          Add new product: "{newProduct.name}"
+                        <Package size={16} color="#007AFF" />
+                        <Text style={styles.quickProductName} numberOfLines={1}>
+                          {product.name}
+                        </Text>
+                        <Text style={styles.quickProductPrice}>
+                          {formatCurrency(product.price)}
                         </Text>
                       </TouchableOpacity>
-                    )}
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+              
+              {/* Product Not Found Option */}
+              {newProduct.name.length > 0 && filteredProducts.length === 0 && (
+                <TouchableOpacity
+                  style={styles.addNewProductCard}
+                  onPress={handleAddNewProduct}
+                >
+                  <Plus size={20} color="#34C759" />
+                  <View style={styles.addNewProductTextContainer}>
+                    <Text style={styles.addNewProductTitle}>Product Not Found</Text>
+                    <Text style={styles.addNewProductSubtitle}>
+                      Create new product: "{newProduct.name}"
+                    </Text>
                   </View>
-                )}
-              </View>
+                </TouchableOpacity>
+              )}
+              
               <CustomInput
                 label="Quantity"
                 value={newProductQtyInput}
@@ -1074,30 +1034,6 @@ export default function GenerateBillScreen() {
 }
 
 const styles = StyleSheet.create({
-
-  suggestionsContainer: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    maxHeight: 200, // Fixed height for scrollable area
-    zIndex: 1000,
-    elevation: 5, // For Android shadow
-  },
-  scrollableSuggestions: {
-    flex: 1,
-  },
-  suggestionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
@@ -1144,6 +1080,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F8FF',
     borderRadius: 8,
   },
+  suggestionsContainer: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    maxHeight: 200,
+    zIndex: 1000,
+    elevation: 5,
+  },
+  scrollableSuggestions: {
+    flex: 1,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
   suggestionDetails: {
     flex: 1,
     marginLeft: 12,
@@ -1159,170 +1118,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   
-  // Product table styles
-  productTable: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 16,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#F8F9FA',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  tableHeaderCell: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
-  },
-  tableRow: {
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  tableInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    fontSize: 14,
-    backgroundColor: '#FFFFFF',
-  },
-  tableCell: {
-    flex: 1,
-    fontSize: 14,
-    color: '#333',
-    textAlign: 'center',
-    paddingVertical: 8,
-  },
-  productNameCell: {
-    flex: 2,
-    position: 'relative',
-  },
-  qtyCell: {
-    flex: 0.8,
-    marginHorizontal: 4,
-  },
-  priceCell: {
-    flex: 1,
-    marginHorizontal: 4,
-  },
-  discountCell: {
-    flex: 0.8,
-    marginHorizontal: 4,
-  },
-  addItemButton: {
-    backgroundColor: '#34C759',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 8,
-  },
-  itemActions: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    flex: 1,
-  },
-  editActions: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    flex: 1,
-  },
-  saveButton: {
-    backgroundColor: '#34C759',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    marginBottom: 4,
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  cancelButton: {
-    backgroundColor: '#FF3B30',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  cancelButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  itemTotalRow: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-  },
-  itemTotal: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    textAlign: 'right',
-  },
-  discountText: {
-    color: '#FF9500',
-    fontSize: 12,
-  },
-  
-  // Product suggestions in table
-  productSuggestionsContainer: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    maxHeight: 150,
-    zIndex: 1000,
-  },
-  productSuggestionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  productSuggestionName: {
-    flex: 1,
-    fontSize: 14,
-    color: '#333',
-    marginLeft: 8,
-  },
-  productSuggestionPrice: {
-    fontSize: 12,
-    color: '#666',
-  },
-  addNewProductSuggestion: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-    backgroundColor: '#F8F9FA',
-  },
-  addNewProductText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#34C759',
-    marginLeft: 8,
-  },
-  
+  // Product styles
   emptyCart: {
     alignItems: 'center',
     padding: 32,
@@ -1340,6 +1136,145 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 8,
     textAlign: 'center',
+  },
+  
+  // Cart list styles
+  cartList: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  cartItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  cartItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  productName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  deleteButton: {
+    padding: 4,
+  },
+  cartItemDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  qtyControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    padding: 4,
+  },
+  qtyButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  qtyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginHorizontal: 12,
+    minWidth: 24,
+    textAlign: 'center',
+  },
+  priceText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  itemDiscountContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  itemDiscountLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginRight: 8,
+  },
+  itemDiscountInput: {
+    width: 80,
+  },
+  smallInput: {
+    height: 40,
+  },
+  discountText: {
+    color: '#FF9500',
+    fontSize: 12,
+  },
+  
+  // Quick Products Selection
+  quickProductsContainer: {
+    marginBottom: 16,
+  },
+  quickProductsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  quickProductsScroll: {
+    flexGrow: 0,
+  },
+  quickProductItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 8,
+    marginRight: 8,
+    minWidth: 150,
+  },
+  quickProductName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+    marginLeft: 8,
+    marginRight: 8,
+    flex: 1,
+  },
+  quickProductPrice: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  
+  // Add New Product Card
+  addNewProductCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F8F0',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#34C759',
+  },
+  addNewProductTextContainer: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  addNewProductTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2D5A2D',
+  },
+  addNewProductSubtitle: {
+    fontSize: 14,
+    color: '#4A7C4A',
+    marginTop: 2,
   },
   
   // Settings Card Styles
@@ -1507,79 +1442,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   
-  // Cart list styles
-  cartList: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  cartItem: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  cartItemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  productName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    flex: 1,
-  },
-  deleteButton: {
-    padding: 4,
-  },
-  cartItemDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  qtyControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    padding: 4,
-  },
-  qtyButton: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  qtyText: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginHorizontal: 12,
-    minWidth: 24,
-    textAlign: 'center',
-  },
-  priceText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  itemDiscountContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  itemDiscountLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginRight: 8,
-  },
-  itemDiscountInput: {
-    width: 80,
-  },
-  smallInput: {
-    height: 40,
-  },
-  
   // Modal styles
   modalContainer: {
     flex: 1,
@@ -1616,24 +1478,6 @@ const styles = StyleSheet.create({
   },
   productForm: {
     flex: 1,
-  },
-  productInputContainer: {
-    position: 'relative',
-    marginBottom: 16,
-    zIndex: 1000,
-  },
-  suggestionPrice: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  noSuggestions: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  noSuggestionsText: {
-    fontSize: 14,
-    color: '#999',
   },
   addNewProductOption: {
     flexDirection: 'row',
