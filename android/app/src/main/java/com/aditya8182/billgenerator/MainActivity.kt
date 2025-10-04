@@ -1,4 +1,4 @@
-package com.aditya8182.boltexponativewind
+package com.aditya8182.billgenerator
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

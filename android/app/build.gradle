@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.aditya8182.boltexponativewind'
+    namespace 'com.aditya8182.billgenerator'
     defaultConfig {
-        applicationId 'com.aditya8182.boltexponativewind'
+        applicationId 'com.aditya8182.billgenerator'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
