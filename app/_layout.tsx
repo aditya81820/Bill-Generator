@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { StorageService } from '@/utils/storage';
+import { checkLicenseStatus } from '@/utils/license';
 
 // Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -12,15 +13,22 @@ export default function RootLayout() {
   useFrameworkReady();
 
   useEffect(() => {
-    checkOnboarding();
+    checkStartup();
   }, []);
 
-  const checkOnboarding = async () => {
+  const checkStartup = async () => {
     try {
-      const shop = await StorageService.getShop();
-      if (!shop) {
-        router.replace('/onboarding');
+      // 1) Ensure license is valid/bound
+      const lic = await checkLicenseStatus();
+      if (!lic.ok) {
+        router.replace('/license' as any);
+        await SplashScreen.hideAsync();
+        return;
       }
+
+      // 2) Continue to onboarding if shop not configured
+      const shop = await StorageService.getShop();
+      if (!shop) router.replace('/onboarding');
       // Hide splash screen after initialization
       await SplashScreen.hideAsync();
     } catch (error) {
@@ -33,6 +41,7 @@ export default function RootLayout() {
   return (
     <>
       <Stack screenOptions={{ headerShown: false, gestureEnabled: false }}>
+        <Stack.Screen name="license" />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="invoice-preview" />
