@@ -13,7 +13,7 @@ import { Shop, Invoice } from '@/types';
 import { formatCurrency } from '@/utils/calculations';
 import CustomButton from '@/components/CustomButton';
 import LoadingSpinner from '@/components/LoadingSpinner';
-import { FileText, Package, TrendingUp, Users } from 'lucide-react-native';
+import { FileText, Package, TrendingUp, Users, CheckCircle, Clock } from 'lucide-react-native';
 
 export default function DashboardScreen() {
   const [shop, setShop] = useState<Shop | null>(null);
@@ -122,24 +122,37 @@ export default function DashboardScreen() {
           </View>
         ) : (
           <View style={styles.invoiceList}>
-            {recentInvoices.map((invoice) => (
-              <TouchableOpacity
-                key={invoice.id}
-                style={styles.invoiceItem}
-                onPress={() => router.push(`/invoice-preview?id=${invoice.id}`)}
-              >
-                <View style={styles.invoiceInfo}>
-                  <Text style={styles.invoiceNumber}>{invoice.invoiceNumber}</Text>
-                  <Text style={styles.customerName}>{invoice.customerName}</Text>
-                  <Text style={styles.invoiceDate}>
-                    {new Date(invoice.date).toLocaleDateString()}
-                  </Text>
-                </View>
-                <Text style={styles.invoiceAmount}>
-                  {formatCurrency(invoice.total)}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {recentInvoices.map((invoice) => {
+              const isPaid = invoice.isPaid || (invoice.dueAmount !== undefined ? invoice.dueAmount <= 0 : false);
+              return (
+                <TouchableOpacity
+                  key={invoice.id}
+                  style={styles.invoiceItem}
+                  onPress={() => router.push(`/invoice-preview?id=${invoice.id}`)}
+                >
+                  <View style={styles.invoiceInfo}>
+                    <Text style={styles.invoiceNumber}>{invoice.invoiceNumber}</Text>
+                    <Text style={styles.customerName}>{invoice.customerName}</Text>
+                    <Text style={styles.invoiceDate}>
+                      {new Date(invoice.date).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  <View style={styles.invoiceRight}>
+                    <Text style={styles.invoiceAmount}>{formatCurrency(invoice.total)}</Text>
+                    <View style={[styles.statusPill, isPaid ? styles.statusPaid : styles.statusUnpaid]}>
+                      {isPaid ? (
+                        <CheckCircle size={14} color="#0A7C2F" />
+                      ) : (
+                        <Clock size={14} color="#B45309" />
+                      )}
+                      <Text style={[styles.statusText, isPaid ? styles.statusPaidText : styles.statusUnpaidText]}>
+                        {isPaid ? 'Paid' : 'Unpaid'}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
       </View>
@@ -265,5 +278,38 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#007AFF',
+  },
+  invoiceRight: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    marginTop: 4,
+  },
+  statusPaid: {
+    backgroundColor: '#E8F5EE',
+    borderWidth: 1,
+    borderColor: '#A7E3C2',
+  },
+  statusUnpaid: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FACC15',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  statusPaidText: {
+    color: '#0A7C2F',
+  },
+  statusUnpaidText: {
+    color: '#B45309',
   },
 });

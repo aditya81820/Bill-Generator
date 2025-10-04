@@ -12,7 +12,7 @@ import { StorageService } from '@/utils/storage';
 import { formatCurrency, formatDate } from '@/utils/calculations';
 import { Invoice } from '@/types';
 import LoadingSpinner from '@/components/LoadingSpinner';
-import { Search, FileText } from 'lucide-react-native';
+import { Search, FileText, CheckCircle, Clock } from 'lucide-react-native';
 
 export default function InvoicesScreen() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -56,22 +56,37 @@ export default function InvoicesScreen() {
     setFilteredInvoices(filtered);
   };
 
-  const renderInvoiceItem = ({ item }: { item: Invoice }) => (
-    <TouchableOpacity
-      style={styles.invoiceItem}
-      onPress={() => router.push(`/invoice-preview?id=${item.id}`)}
-    >
-      <View style={styles.invoiceHeader}>
-        <Text style={styles.invoiceNumber}>{item.invoiceNumber}</Text>
-        <Text style={styles.invoiceAmount}>{formatCurrency(item.total)}</Text>
-      </View>
-      <Text style={styles.customerName}>{item.customerName}</Text>
-      {item.customerPhone && (
-        <Text style={styles.customerPhone}>{item.customerPhone}</Text>
-      )}
-      <Text style={styles.invoiceDate}>{formatDate(item.date)}</Text>
-    </TouchableOpacity>
-  );
+  const renderInvoiceItem = ({ item }: { item: Invoice }) => {
+    const isPaid = item.isPaid || (item.dueAmount !== undefined ? item.dueAmount <= 0 : false);
+    return (
+      <TouchableOpacity
+        style={styles.invoiceItem}
+        onPress={() => router.push(`/invoice-preview?id=${item.id}`)}
+      >
+        <View style={styles.invoiceHeader}>
+          <Text style={styles.invoiceNumber}>{item.invoiceNumber}</Text>
+          <View style={styles.invoiceRight}>
+            <Text style={styles.invoiceAmount}>{formatCurrency(item.total)}</Text>
+            <View style={[styles.statusPill, isPaid ? styles.statusPaid : styles.statusUnpaid]}>
+              {isPaid ? (
+                <CheckCircle size={14} color="#0A7C2F" />
+              ) : (
+                <Clock size={14} color="#B45309" />
+              )}
+              <Text style={[styles.statusText, isPaid ? styles.statusPaidText : styles.statusUnpaidText]}>
+                {isPaid ? 'Paid' : 'Unpaid'}
+              </Text>
+            </View>
+          </View>
+        </View>
+        <Text style={styles.customerName}>{item.customerName}</Text>
+        {item.customerPhone && (
+          <Text style={styles.customerPhone}>{item.customerPhone}</Text>
+        )}
+        <Text style={styles.invoiceDate}>{formatDate(item.date)}</Text>
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return <LoadingSpinner />;
@@ -190,6 +205,39 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#007AFF',
+  },
+  invoiceRight: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    marginTop: 4,
+  },
+  statusPaid: {
+    backgroundColor: '#E8F5EE',
+    borderWidth: 1,
+    borderColor: '#A7E3C2',
+  },
+  statusUnpaid: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FACC15',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  statusPaidText: {
+    color: '#0A7C2F',
+  },
+  statusUnpaidText: {
+    color: '#B45309',
   },
   customerName: {
     fontSize: 16,
