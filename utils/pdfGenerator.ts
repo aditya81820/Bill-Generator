@@ -106,7 +106,7 @@ export const generateInvoicePDF = async (invoice: Invoice, shop: Shop): Promise<
           ` : ''}
           ${invoice.otherCharges > 0 ? `
             <tr>
-              <td>Other Charges:</td>
+              <td>${invoice.otherChargesLabel || 'Other Charges'}:</td>
               <td class="text-right">${formatCurrency(invoice.otherCharges)}</td>
             </tr>
           ` : ''}

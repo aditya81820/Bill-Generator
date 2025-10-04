@@ -223,42 +223,44 @@ export default function InvoicePreviewScreen() {
           </View>
 
           {/* Totals */}
-          <View style={styles.totalsSection}>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Subtotal:</Text>
-              <Text style={styles.totalValue}>{formatCurrency(invoice.subtotal)}</Text>
-            </View>
-            
-            {invoice.billDiscount > 0 && (
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Bill Discount:</Text>
-                <Text style={[styles.totalValue, styles.discountValue]}>
-                  -{formatCurrency(invoice.billDiscount)}
-                </Text>
-              </View>
-            )}
-            
-            {invoice.taxPercent > 0 && (
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Tax ({invoice.taxPercent}%):</Text>
-                <Text style={styles.totalValue}>
-                  {formatCurrency((invoice.taxPercent / 100) * (invoice.subtotal - invoice.billDiscount))}
-                </Text>
-              </View>
-            )}
-            
-            {invoice.otherCharges > 0 && (
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Other Charges:</Text>
-                <Text style={styles.totalValue}>{formatCurrency(invoice.otherCharges)}</Text>
-              </View>
-            )}
-            
-            <View style={[styles.totalRow, styles.grandTotalRow]}>
-              <Text style={styles.grandTotalLabel}>Grand Total:</Text>
-              <Text style={styles.grandTotalValue}>{formatCurrency(invoice.total)}</Text>
-            </View>
-          </View>
+<View style={styles.totalsSection}>
+  <View style={styles.totalRow}>
+    <Text style={styles.totalLabel}>Subtotal:</Text>
+    <Text style={styles.totalValue}>{formatCurrency(invoice.subtotal)}</Text>
+  </View>
+  
+  {invoice.billDiscount > 0 && (
+    <View style={styles.totalRow}>
+      <Text style={styles.totalLabel}>Bill Discount:</Text>
+      <Text style={[styles.totalValue, styles.discountValue]}>
+        -{formatCurrency(invoice.billDiscount)}
+      </Text>
+    </View>
+  )}
+  
+  {invoice.taxPercent > 0 && (
+    <View style={styles.totalRow}>
+      <Text style={styles.totalLabel}>Tax ({invoice.taxPercent}%):</Text>
+      <Text style={styles.totalValue}>
+        {formatCurrency((invoice.taxPercent / 100) * (invoice.subtotal - invoice.billDiscount))}
+      </Text>
+    </View>
+  )}
+  
+  {invoice.otherCharges > 0 && (
+    <View style={styles.totalRow}>
+      <Text style={styles.totalLabel}>
+        {invoice.otherChargesLabel || 'Other Charges'}:
+      </Text>
+      <Text style={styles.totalValue}>{formatCurrency(invoice.otherCharges)}</Text>
+    </View>
+  )}
+  
+  <View style={[styles.totalRow, styles.grandTotalRow]}>
+    <Text style={styles.grandTotalLabel}>Grand Total:</Text>
+    <Text style={styles.grandTotalValue}>{formatCurrency(invoice.total)}</Text>
+  </View>
+</View>
 
           {/* Payment Details */}
           {(invoice.paidAmount !== undefined || invoice.paymentMode) && (

@@ -41,6 +41,7 @@ export interface Invoice {
   billDiscount: number;
   taxPercent: number;
   otherCharges: number;
+  otherChargesLabel?: string;
   subtotal: number;
   total: number;
   paidAmount?: number;

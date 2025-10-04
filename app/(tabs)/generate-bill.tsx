@@ -42,6 +42,10 @@ export default function GenerateBillScreen() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [showContactPicker, setShowContactPicker] = useState(false);
+
+  // Add these new states near the other state declarations
+  const [otherChargesLabel, setOtherChargesLabel] = useState('Other Charges');
+  const [showOtherChargesFields, setShowOtherChargesFields] = useState(false);
   
   // Cart and Products
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -403,6 +407,7 @@ export default function GenerateBillScreen() {
       billDiscount: calculation.billDiscount,
       taxPercent,
       otherCharges,
+      otherChargesLabel: otherChargesLabel,
       subtotal: calculation.subtotal,
       total: calculation.grandTotal,
       paidAmount,
@@ -618,75 +623,103 @@ export default function GenerateBillScreen() {
       </View>
 
       {/* Discount & Tax Settings */}
-      {cartItems.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Discount & Tax Settings</Text>
-          <View style={styles.settingsCard}>
-            <View style={styles.settingRow}>
-              <Text style={styles.settingLabel}>Bill Discount</Text>
-              <View style={styles.discountControls}>
-                <TouchableOpacity
-                  style={[styles.discountTypeButton, billDiscountType === 'percentage' && styles.discountTypeActive]}
-                  onPress={() => setBillDiscountType('percentage')}
-                >
-                  <Text style={[styles.discountTypeText, billDiscountType === 'percentage' && styles.discountTypeTextActive]}>%</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.discountTypeButton, billDiscountType === 'amount' && styles.discountTypeActive]}
-                  onPress={() => setBillDiscountType('amount')}
-                >
-                  <Text style={[styles.discountTypeText, billDiscountType === 'amount' && styles.discountTypeTextActive]}>₹</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+      {/* Discount & Tax Settings */}
+{cartItems.length > 0 && (
+  <View style={styles.section}>
+    <Text style={styles.sectionTitle}>Discount & Tax Settings</Text>
+    <View style={styles.settingsCard}>
+      <View style={styles.settingRow}>
+        <Text style={styles.settingLabel}>Bill Discount</Text>
+        <View style={styles.discountControls}>
+          <TouchableOpacity
+            style={[styles.discountTypeButton, billDiscountType === 'percentage' && styles.discountTypeActive]}
+            onPress={() => setBillDiscountType('percentage')}
+          >
+            <Text style={[styles.discountTypeText, billDiscountType === 'percentage' && styles.discountTypeTextActive]}>%</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.discountTypeButton, billDiscountType === 'amount' && styles.discountTypeActive]}
+            onPress={() => setBillDiscountType('amount')}
+          >
+            <Text style={[styles.discountTypeText, billDiscountType === 'amount' && styles.discountTypeTextActive]}>₹</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+      <CustomInput
+        label=""
+        value={billDiscountInput}
+        onChangeText={(text) => {
+          setBillDiscountInput(text);
+          setBillDiscount(text === '' ? 0 : parseFloat(text));
+        }}
+        keyboardType="numeric"
+        placeholder={billDiscountType === 'percentage' ? 'Enter percentage' : 'Enter amount'}
+      />
+      
+      <View style={styles.settingRow}>
+        <Text style={styles.settingLabel}>Apply GST</Text>
+        <Switch
+          value={applyTax}
+          onValueChange={(value) => {
+            setApplyTax(value);
+            setTaxPercent(value ? 18 : 0);
+          }}
+        />
+      </View>
+      
+      {applyTax && (
+        <CustomInput
+          label="GST Rate (%)"
+          value={taxPercentInput}
+          onChangeText={(text) => {
+            setTaxPercentInput(text);
+            setTaxPercent(text === '' ? 0 : parseFloat(text));
+          }}
+          keyboardType="numeric"
+          placeholder="Enter GST percentage"
+        />
+      )}
+      
+      {/* Updated Other Charges Section with Toggle */}
+      <View style={styles.otherChargesContainer}>
+        <View style={styles.settingRow}>
+          <Text style={styles.settingLabel}>Other Charges</Text>
+          <Switch
+            value={showOtherChargesFields}
+            onValueChange={(value) => {
+              setShowOtherChargesFields(value);
+              if (!value) {
+                setOtherCharges(0);
+                setOtherChargesInput('');
+              }
+            }}
+          />
+        </View>
+        
+        {showOtherChargesFields && (
+          <View style={styles.otherChargesFields}>
             <CustomInput
-              label=""
-              value={billDiscountInput}
-              onChangeText={(text) => {
-                setBillDiscountInput(text);
-                setBillDiscount(text === '' ? 0 : parseFloat(text));
-              }}
-              keyboardType="numeric"
-              placeholder={billDiscountType === 'percentage' ? 'Enter percentage' : 'Enter amount'}
+              label="Charge Description"
+              value={otherChargesLabel}
+              onChangeText={setOtherChargesLabel}
+              placeholder="Enter charge description"
             />
-            
-            <View style={styles.settingRow}>
-              <Text style={styles.settingLabel}>Apply GST</Text>
-              <Switch
-                value={applyTax}
-                onValueChange={(value) => {
-                  setApplyTax(value);
-                  setTaxPercent(value ? 18 : 0);
-                }}
-              />
-            </View>
-            
-            {applyTax && (
-              <CustomInput
-                label="GST Rate (%)"
-                value={taxPercentInput}
-                onChangeText={(text) => {
-                  setTaxPercentInput(text);
-                  setTaxPercent(text === '' ? 0 : parseFloat(text));
-                }}
-                keyboardType="numeric"
-                placeholder="Enter GST percentage"
-              />
-            )}
-            
             <CustomInput
-              label="Other Charges"
+              label="Amount"
               value={otherChargesInput}
               onChangeText={(text) => {
                 setOtherChargesInput(text);
                 setOtherCharges(text === '' ? 0 : parseFloat(text));
               }}
               keyboardType="numeric"
-              placeholder="Additional charges (optional)"
+              placeholder="Enter amount"
             />
           </View>
-        </View>
-      )}
+        )}
+      </View>
+    </View>
+  </View>
+)}
 
       {/* Payment Section */}
       {cartItems.length > 0 && (
@@ -744,50 +777,50 @@ export default function GenerateBillScreen() {
         </View>
       )}
 
-      {/* Bill Summary */}
-      {cartItems.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Bill Summary</Text>
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Subtotal:</Text>
-              <Text style={styles.summaryValue}>{formatCurrency(calculation.subtotal)}</Text>
-            </View>
-            {calculation.totalProductDiscounts > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Product Discounts:</Text>
-                <Text style={[styles.summaryValue, styles.discountValue]}>
-                  -{formatCurrency(calculation.totalProductDiscounts)}
-                </Text>
-              </View>
-            )}
-            {calculation.billDiscount > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Bill Discount:</Text>
-                <Text style={[styles.summaryValue, styles.discountValue]}>
-                  -{formatCurrency(calculation.billDiscount)}
-                </Text>
-              </View>
-            )}
-            {calculation.taxAmount > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Tax ({taxPercent}%):</Text>
-                <Text style={styles.summaryValue}>{formatCurrency(calculation.taxAmount)}</Text>
-              </View>
-            )}
-            {otherCharges > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Other Charges:</Text>
-                <Text style={styles.summaryValue}>{formatCurrency(otherCharges)}</Text>
-              </View>
-            )}
-            <View style={[styles.summaryRow, styles.totalRow]}>
-              <Text style={styles.totalLabel}>Grand Total:</Text>
-              <Text style={styles.totalValue}>{formatCurrency(calculation.grandTotal)}</Text>
-            </View>
-          </View>
+{/* Bill Summary - Updated to use dynamic label */}
+{cartItems.length > 0 && (
+  <View style={styles.section}>
+    <Text style={styles.sectionTitle}>Bill Summary</Text>
+    <View style={styles.summaryCard}>
+      <View style={styles.summaryRow}>
+        <Text style={styles.summaryLabel}>Subtotal:</Text>
+        <Text style={styles.summaryValue}>{formatCurrency(calculation.subtotal)}</Text>
+      </View>
+      {calculation.totalProductDiscounts > 0 && (
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Product Discounts:</Text>
+          <Text style={[styles.summaryValue, styles.discountValue]}>
+            -{formatCurrency(calculation.totalProductDiscounts)}
+          </Text>
         </View>
       )}
+      {calculation.billDiscount > 0 && (
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Bill Discount:</Text>
+          <Text style={[styles.summaryValue, styles.discountValue]}>
+            -{formatCurrency(calculation.billDiscount)}
+          </Text>
+        </View>
+      )}
+      {calculation.taxAmount > 0 && (
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Tax ({taxPercent}%):</Text>
+          <Text style={styles.summaryValue}>{formatCurrency(calculation.taxAmount)}</Text>
+        </View>
+      )}
+      {otherCharges > 0 && (
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>{otherChargesLabel}:</Text>
+          <Text style={styles.summaryValue}>{formatCurrency(otherCharges)}</Text>
+        </View>
+      )}
+      <View style={[styles.summaryRow, styles.totalRow]}>
+        <Text style={styles.totalLabel}>Grand Total:</Text>
+        <Text style={styles.totalValue}>{formatCurrency(calculation.grandTotal)}</Text>
+      </View>
+    </View>
+  </View>
+)}
 
       {/* Action Buttons */}
       {cartItems.length > 0 && (
@@ -1493,5 +1526,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginLeft: 8,
     flex: 1,
+  },
+  // Add these styles to the StyleSheet:
+  otherChargesContainer: {
+    marginBottom: 16,
+  },
+  otherChargesFields: {
+    gap: 12,
   },
 });
