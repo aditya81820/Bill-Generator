@@ -87,26 +87,15 @@ export default function InvoicePreviewScreen() {
       Alert.alert('Missing Phone', 'No customer phone number to send WhatsApp message.');
       return;
     }
+  
     try {
-      const lines: string[] = [];
-      lines.push(`${shop.name || 'Shop'}`);
-      lines.push('Estimated Bill');
-      lines.push(`Date: ${formatDate(invoice.date)}`);
-      lines.push('');
-      invoice.items.forEach((item) => {
-        const itemTotal = item.qty * item.unitPrice;
-        const discountAmount = (item.discount / 100) * itemTotal;
-        const net = itemTotal - discountAmount;
-        lines.push(`${item.name} x${item.qty} @ ${formatCurrency(item.unitPrice)}${item.discount ? ` (-${item.discount}%)` : ''} = ${formatCurrency(net)}`);
-      });
-      lines.push('');
-      lines.push(`Grand Total: ${formatCurrency(invoice.total)}`);
-      const message = lines.join('\n');
+      const message = 'Hii 👋';
       await shareInvoiceToWhatsApp(invoice.customerPhone, message);
     } catch (error) {
-      Alert.alert('Error', 'Failed to send text invoice');
+      Alert.alert('Error', 'Failed to send WhatsApp message');
     }
   };
+  
 
   const handleDownload = async () => {
     if (!invoice || !shop) return;
@@ -323,7 +312,7 @@ export default function InvoicePreviewScreen() {
           />
         )}
         <CustomButton
-          title="Send Text Invoice (WhatsApp)"
+          title="Send Hi!"
           onPress={handleShareText}
           variant="secondary"
           style={styles.actionButton}
