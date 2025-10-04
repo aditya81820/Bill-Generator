@@ -4,7 +4,7 @@ import { StorageService } from '@/utils/storage';
 import { Customer } from '@/types';
 import CustomInput from '@/components/CustomInput';
 import CustomButton from '@/components/CustomButton';
-import { Plus, User, Phone, MapPin, Trash2 } from 'lucide-react-native';
+import { Plus, User, Phone, MapPin, Trash2, Pencil } from 'lucide-react-native';
 
 export default function CustomersScreen() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -13,6 +13,7 @@ export default function CustomersScreen() {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [form, setForm] = useState({ name: '', phone: '', address: '' });
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
     load();
@@ -38,6 +39,17 @@ export default function CustomersScreen() {
 
   const openAdd = () => {
     setForm({ name: '', phone: '', address: '' });
+    setEditingId(null);
+    setShowAddModal(true);
+  };
+
+  const openEdit = (customer: Customer) => {
+    setForm({
+      name: customer.name || '',
+      phone: customer.phone || '',
+      address: customer.address || '',
+    });
+    setEditingId(customer.id);
     setShowAddModal(true);
   };
 
@@ -47,17 +59,33 @@ export default function CustomersScreen() {
       return;
     }
     try {
-      const saved = await StorageService.addCustomer({
-        name: form.name.trim(),
-        phone: form.phone.trim() || undefined,
-        address: form.address.trim() || undefined,
-      });
-      setCustomers(prev => {
-        const exists = prev.find(c => c.id === saved.id);
-        return exists ? prev.map(c => (c.id === saved.id ? saved : c)) : [...prev, saved];
-      });
-      setShowAddModal(false);
-      Alert.alert('Success', 'Customer saved');
+      if (editingId) {
+        await StorageService.updateCustomer(editingId, {
+          name: form.name.trim(),
+          phone: form.phone.trim() || undefined,
+          address: form.address.trim() || undefined,
+        });
+        setCustomers(prev => prev.map(c => (c.id === editingId ? { ...c, ...{
+          name: form.name.trim(),
+          phone: form.phone.trim() || undefined,
+          address: form.address.trim() || undefined,
+        }} : c)));
+        setShowAddModal(false);
+        setEditingId(null);
+        Alert.alert('Success', 'Customer updated');
+      } else {
+        const saved = await StorageService.addCustomer({
+          name: form.name.trim(),
+          phone: form.phone.trim() || undefined,
+          address: form.address.trim() || undefined,
+        });
+        setCustomers(prev => {
+          const exists = prev.find(c => c.id === saved.id);
+          return exists ? prev.map(c => (c.id === saved.id ? saved : c)) : [...prev, saved];
+        });
+        setShowAddModal(false);
+        Alert.alert('Success', 'Customer saved');
+      }
     } catch (e) {
       Alert.alert('Error', 'Failed to save customer');
     }
@@ -83,9 +111,14 @@ export default function CustomersScreen() {
     <View style={styles.item}>
       <View style={styles.itemHeader}>
         <Text style={styles.name}>{item.name}</Text>
-        <TouchableOpacity onPress={() => confirmDelete(item.id)} style={styles.deleteBtn}>
-          <Trash2 size={18} color="#FF3B30" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity onPress={() => openEdit(item)} style={styles.editBtn}>
+            <Pencil size={18} color="#007AFF" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => confirmDelete(item.id)} style={styles.deleteBtn}>
+            <Trash2 size={18} color="#FF3B30" />
+          </TouchableOpacity>
+        </View>
       </View>
       {item.phone ? (
         <View style={styles.row}>
@@ -139,7 +172,7 @@ export default function CustomersScreen() {
       <Modal visible={showAddModal} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Add Customer</Text>
+            <Text style={styles.modalTitle}>{editingId ? 'Edit Customer' : 'Add Customer'}</Text>
             <TouchableOpacity onPress={() => setShowAddModal(false)}>
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
@@ -170,7 +203,7 @@ export default function CustomersScreen() {
             />
           </ScrollView>
           <View style={styles.modalFooter}>
-            <CustomButton title="Save Customer" onPress={save} variant="primary" />
+            <CustomButton title={editingId ? 'Update Customer' : 'Save Customer'} onPress={save} variant="primary" />
           </View>
         </View>
       </Modal>
@@ -260,6 +293,10 @@ const styles = StyleSheet.create({
   },
   deleteBtn: {
     padding: 4,
+  },
+  editBtn: {
+    padding: 4,
+    marginRight: 8,
   },
   modalContainer: {
     flex: 1,
