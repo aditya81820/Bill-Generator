@@ -520,36 +520,41 @@ export default function GenerateBillScreen() {
               placeholder="Enter customer name"
             />
             {showCustomerSuggestions && (
-              <View style={styles.suggestionsContainer}>
-                {filteredCustomers.length > 0 && (
-                  <FlatList
-                    data={filteredCustomers.slice(0, 5)}
-                    keyExtractor={(item) => item.id}
-                    keyboardShouldPersistTaps="always"
-                    scrollEnabled={false}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity
-                        style={styles.suggestionItem}
-                        onPress={() => selectCustomer(item)}
-                        onPressIn={() => selectCustomer(item)}
-                      >
-                        <User size={16} color="#007AFF" />
-                        <View style={styles.suggestionDetails}>
-                          <Text style={styles.suggestionName}>{item.name}</Text>
-                          {item.phone && (
-                            <Text style={styles.suggestionPhone}>{item.phone}</Text>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    )}
-                  />
-                )}
-                <TouchableOpacity style={styles.addNewProductOption} onPress={openAddCustomerModal}>
-                  <Plus size={16} color="#34C759" />
-                  <Text style={styles.addNewActionText}>Add New Customer{customerName ? `: "${customerName}"` : ''}</Text>
-                </TouchableOpacity>
-              </View>
+  <View style={styles.suggestionsContainer}>
+    <ScrollView 
+      style={styles.scrollableSuggestions}
+      nestedScrollEnabled={true}
+      keyboardShouldPersistTaps="always"
+    >
+      {filteredCustomers.map((item) => (
+        <TouchableOpacity
+          key={item.id}
+          style={styles.suggestionItem}
+          onPress={() => selectCustomer(item)}
+        >
+          <User size={16} color="#007AFF" />
+          <View style={styles.suggestionDetails}>
+            <Text style={styles.suggestionName}>{item.name}</Text>
+            {item.phone && (
+              <Text style={styles.suggestionPhone}>{item.phone}</Text>
             )}
+          </View>
+        </TouchableOpacity>
+      ))}
+      
+      {/* Add New Customer Option */}
+      <TouchableOpacity 
+        style={styles.addNewProductOption} 
+        onPress={openAddCustomerModal}
+      >
+        <Plus size={16} color="#34C759" />
+        <Text style={styles.addNewActionText}>
+          Add New Customer{customerName ? `: "${customerName}"` : ''}
+        </Text>
+      </TouchableOpacity>
+    </ScrollView>
+  </View>
+)}
           </View>
         </View>
       </View>
@@ -1069,6 +1074,30 @@ export default function GenerateBillScreen() {
 }
 
 const styles = StyleSheet.create({
+
+  suggestionsContainer: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    maxHeight: 200, // Fixed height for scrollable area
+    zIndex: 1000,
+    elevation: 5, // For Android shadow
+  },
+  scrollableSuggestions: {
+    flex: 1,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
@@ -1114,25 +1143,6 @@ const styles = StyleSheet.create({
     padding: 8,
     backgroundColor: '#F0F8FF',
     borderRadius: 8,
-  },
-  suggestionsContainer: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    maxHeight: 200,
-    zIndex: 1000,
-  },
-  suggestionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
   },
   suggestionDetails: {
     flex: 1,
